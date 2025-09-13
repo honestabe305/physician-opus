@@ -83,12 +83,12 @@ export function AppSidebar() {
                           `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                             isActive
                               ? "bg-primary text-primary-foreground font-medium"
-                              : "text-foreground hover:bg-muted"
+                              : "text-foreground/90 hover:text-foreground hover:bg-muted"
                           }`
                         }
                       >
                         <item.icon className="h-4 w-4 flex-shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
+                        {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
