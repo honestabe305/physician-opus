@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
   User,
   Phone,
   Building2,
@@ -23,12 +36,95 @@ import {
   FileText,
   Save,
   ArrowLeft,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { insertPhysicianSchema, type InsertPhysician } from "@shared/schema";
+import { z } from "zod";
+
+const physicianFormSchema = insertPhysicianSchema.extend({
+  phoneNumbers: z.string().optional(),
+  secondaryPracticeAddresses: z.string().optional(),
+});
+
+type PhysicianFormData = z.infer<typeof physicianFormSchema>;
 
 export default function NewPhysicianPage() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const [currentTab, setCurrentTab] = useState("demographics");
+  const { toast } = useToast();
+
+  const form = useForm<PhysicianFormData>({
+    resolver: zodResolver(physicianFormSchema),
+    defaultValues: {
+      fullLegalName: "",
+      emailAddress: "",
+      npi: "",
+      dateOfBirth: "",
+      gender: undefined,
+      ssn: "",
+      tin: "",
+      deaNumber: "",
+      caqhId: "",
+      homeAddress: "",
+      mailingAddress: "",
+      phoneNumbers: "",
+      practiceName: "",
+      primaryPracticeAddress: "",
+      secondaryPracticeAddresses: "",
+      officePhone: "",
+      officeFax: "",
+      officeContactPerson: "",
+      groupNpi: "",
+      groupTaxId: "",
+      malpracticeCarrier: "",
+      malpracticePolicyNumber: "",
+      coverageLimits: "",
+      status: "active",
+    },
+  });
+
+  const createPhysicianMutation = useMutation({
+    mutationFn: async (data: PhysicianFormData) => {
+      // Transform form data to match API expectations
+      const apiData: InsertPhysician = {
+        ...data,
+        phoneNumbers: data.phoneNumbers ? [data.phoneNumbers] : undefined,
+        secondaryPracticeAddresses: data.secondaryPracticeAddresses 
+          ? [data.secondaryPracticeAddresses] 
+          : undefined,
+        malpracticeExpirationDate: data.malpracticeExpirationDate || undefined,
+      };
+      
+      return apiRequest('/api/physicians', {
+        method: 'POST',
+        body: apiData,
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Physician profile created successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/physicians'] });
+      setLocation('/physicians');
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create physician profile",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: PhysicianFormData) => {
+    createPhysicianMutation.mutate(data);
+  };
 
   const tabSections = [
     { id: "demographics", label: "Demographics", icon: User },
@@ -39,13 +135,32 @@ export default function NewPhysicianPage() {
     { id: "documents", label: "Documents", icon: FileText },
   ];
 
+  // Helper function to calculate completion percentage for each tab
+  const getTabCompletion = (tabId: string) => {
+    const values = form.getValues();
+    switch (tabId) {
+      case "demographics":
+        const demoFields = [values.fullLegalName, values.npi, values.dateOfBirth, values.gender, values.ssn];
+        return Math.round((demoFields.filter(Boolean).length / demoFields.length) * 100);
+      case "contact":
+        const contactFields = [values.emailAddress, values.phoneNumbers, values.homeAddress];
+        return Math.round((contactFields.filter(Boolean).length / contactFields.length) * 100);
+      case "practice":
+        const practiceFields = [values.practiceName, values.primaryPracticeAddress, values.officePhone];
+        return Math.round((practiceFields.filter(Boolean).length / practiceFields.length) * 100);
+      default:
+        return 0;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button
           variant="outline"
-          onClick={() => navigate(-1)}
+          onClick={() => setLocation('/physicians')}
           className="gap-2"
+          data-testid="button-back"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -56,286 +171,623 @@ export default function NewPhysicianPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Progress Sidebar */}
-        <Card className="lg:col-span-1 border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg">Progress</CardTitle>
-            <CardDescription>Complete all sections</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {tabSections.map((section) => (
-                <div
-                  key={section.id}
-                  className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                    currentTab === section.id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => setCurrentTab(section.id)}
-                >
-                  <section.icon className="h-4 w-4" />
-                  <span className="text-sm font-medium">{section.label}</span>
-                  <Badge
-                    variant="outline"
-                    className="ml-auto text-xs"
-                  >
-                    0/5
-                  </Badge>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Progress Sidebar */}
+            <Card className="lg:col-span-1 border-border/50 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Progress</CardTitle>
+                <CardDescription>Complete all sections</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {tabSections.map((section) => {
+                    const completion = getTabCompletion(section.id);
+                    return (
+                      <div
+                        key={section.id}
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                          currentTab === section.id
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted"
+                        }`}
+                        onClick={() => setCurrentTab(section.id)}
+                        data-testid={`tab-${section.id}`}
+                      >
+                        <section.icon className="h-4 w-4" />
+                        <span className="text-sm font-medium">{section.label}</span>
+                        <Badge
+                          variant={completion > 0 ? "default" : "outline"}
+                          className="ml-auto text-xs"
+                        >
+                          {completion}%
+                        </Badge>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Form Content */}
-        <div className="lg:col-span-3">
-          <Tabs value={currentTab} onValueChange={setCurrentTab}>
-            <TabsList className="grid w-full grid-cols-6">
-              {tabSections.map((section) => (
-                <TabsTrigger
-                  key={section.id}
-                  value={section.id}
-                  className="text-xs"
-                >
-                  <section.icon className="h-3 w-3 mr-1" />
-                  {section.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {/* Form Content */}
+            <div className="lg:col-span-3">
+              <Tabs value={currentTab} onValueChange={setCurrentTab}>
+                <TabsList className="grid w-full grid-cols-6">
+                  {tabSections.map((section) => (
+                    <TabsTrigger
+                      key={section.id}
+                      value={section.id}
+                      className="text-xs"
+                      data-testid={`trigger-${section.id}`}
+                    >
+                      <section.icon className="h-3 w-3 mr-1" />
+                      {section.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-            {/* Demographics Tab */}
-            <TabsContent value="demographics">
-              <Card className="border-border/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5 text-primary" />
-                    Physician Demographics
-                  </CardTitle>
-                  <CardDescription>
-                    Basic personal information and identifiers
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName">Full Legal Name *</Label>
-                      <Input id="fullName" placeholder="Enter full legal name" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="npi">National Provider Identifier (NPI) *</Label>
-                      <Input id="npi" placeholder="10-digit NPI number" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="dob">Date of Birth *</Label>
-                      <Input id="dob" type="date" />
-                      <p className="text-xs text-muted-foreground">Sensitive information - secured</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="gender">Gender</Label>
-                      <Select>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="male">Male</SelectItem>
-                          <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                          <SelectItem value="prefer-not">Prefer not to say</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ssn">Social Security Number *</Label>
-                      <Input id="ssn" placeholder="XXX-XX-XXXX" type="password" />
-                      <p className="text-xs text-muted-foreground">Sensitive information - secured</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tin">Tax Identification Number (TIN) *</Label>
-                      <Input id="tin" placeholder="XX-XXXXXXX" />
-                      <p className="text-xs text-muted-foreground">Sensitive information - secured</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="dea">DEA Number</Label>
-                      <Input id="dea" placeholder="DEA number (if applicable)" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="caqh">CAQH ID</Label>
-                      <Input id="caqh" placeholder="CAQH ID (if available)" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Contact Tab */}
-            <TabsContent value="contact">
-              <Card className="border-border/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Phone className="h-5 w-5 text-primary" />
-                    Contact Information
-                  </CardTitle>
-                  <CardDescription>
-                    Personal contact details and emergency contacts
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address *</Label>
-                      <Input id="email" type="email" placeholder="physician@example.com" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number *</Label>
-                      <Input id="phone" placeholder="(555) 123-4567" />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="homeAddress">Home Address *</Label>
-                      <Textarea id="homeAddress" placeholder="Enter complete home address" />
-                      <p className="text-xs text-muted-foreground">Sensitive information - secured</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="mailingAddress">Mailing Address</Label>
-                      <Textarea id="mailingAddress" placeholder="Enter mailing address (if different)" />
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <h3 className="text-lg font-semibold mb-4">Emergency Contact</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="emergencyName">Contact Name</Label>
-                        <Input id="emergencyName" placeholder="Emergency contact name" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="emergencyPhone">Contact Phone</Label>
-                        <Input id="emergencyPhone" placeholder="Emergency contact phone" />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Practice Tab */}
-            <TabsContent value="practice">
-              <Card className="border-border/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-primary" />
-                    Practice Information
-                  </CardTitle>
-                  <CardDescription>
-                    Practice details and facility information
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="practiceName">Practice/Facility Name *</Label>
-                      <Input id="practiceName" placeholder="Enter practice name" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="groupNpi">Group NPI</Label>
-                      <Input id="groupNpi" placeholder="Group NPI (if applicable)" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="officePhone">Office Phone *</Label>
-                      <Input id="officePhone" placeholder="(555) 123-4567" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="officeFax">Office Fax</Label>
-                      <Input id="officeFax" placeholder="(555) 123-4567" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="contactPerson">Office Contact Person</Label>
-                      <Input id="contactPerson" placeholder="Primary contact name" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="groupTaxId">Group Tax ID</Label>
-                      <Input id="groupTaxId" placeholder="Group tax identification" />
-                      <p className="text-xs text-muted-foreground">Sensitive information - secured</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="primaryAddress">Primary Practice Address *</Label>
-                      <Textarea id="primaryAddress" placeholder="Enter complete practice address" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="secondaryAddress">Secondary Practice Addresses</Label>
-                      <Textarea id="secondaryAddress" placeholder="Additional practice locations (if any)" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Documents Tab */}
-            <TabsContent value="documents">
-              <Card className="border-border/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    Document Uploads
-                  </CardTitle>
-                  <CardDescription>
-                    Upload required documents and certificates
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { label: "Driver's License", sensitive: true },
-                      { label: "Social Security Card", sensitive: true },
-                      { label: "DEA Certificate", sensitive: false },
-                      { label: "NPI Confirmation Letter", sensitive: false },
-                      { label: "W-9 Form", sensitive: true },
-                      { label: "Malpractice Insurance", sensitive: false },
-                    ].map((doc) => (
-                      <div key={doc.label} className="space-y-2">
-                        <Label>{doc.label}</Label>
-                        <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/30 transition-colors cursor-pointer">
-                          <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Click to upload or drag and drop
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            PDF, JPG, PNG up to 10MB
-                          </p>
-                          {doc.sensitive && (
-                            <Badge variant="outline" className="mt-2 text-xs bg-destructive/10 text-destructive border-destructive/20">
-                              Sensitive
-                            </Badge>
+                {/* Demographics Tab */}
+                <TabsContent value="demographics">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <User className="h-5 w-5 text-primary" />
+                        Physician Demographics
+                      </CardTitle>
+                      <CardDescription>
+                        Basic personal information and identifiers
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="fullLegalName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Legal Name *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Enter full legal name" 
+                                  data-testid="input-full-name"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
                           )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="npi"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>National Provider Identifier (NPI) *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="10-digit NPI number" 
+                                  data-testid="input-npi"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-          {/* Save Actions */}
-          <div className="flex justify-between pt-6">
-            <Button variant="outline">Save as Draft</Button>
-            <div className="flex gap-3">
-              <Button variant="outline">Previous</Button>
-              <Button className="gap-2 bg-gradient-to-r from-primary to-accent">
-                <Save className="h-4 w-4" />
-                Save & Continue
-              </Button>
+                        <FormField
+                          control={form.control}
+                          name="dateOfBirth"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Date of Birth *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="date" 
+                                  data-testid="input-dob"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>Sensitive information - secured</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="gender"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Gender</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-gender">
+                                    <SelectValue placeholder="Select gender" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="male">Male</SelectItem>
+                                  <SelectItem value="female">Female</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                  <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="ssn"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Social Security Number *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="XXX-XX-XXXX" 
+                                  type="password"
+                                  data-testid="input-ssn"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>Sensitive information - secured</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="tin"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Tax Identification Number (TIN) *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="XX-XXXXXXX"
+                                  data-testid="input-tin"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>Sensitive information - secured</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="deaNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>DEA Number</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="DEA number (if applicable)"
+                                  data-testid="input-dea"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="caqhId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>CAQH ID</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="CAQH ID (if available)"
+                                  data-testid="input-caqh"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Contact Tab */}
+                <TabsContent value="contact">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Phone className="h-5 w-5 text-primary" />
+                        Contact Information
+                      </CardTitle>
+                      <CardDescription>
+                        Personal contact details and emergency contacts
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="emailAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email Address *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="email" 
+                                  placeholder="physician@example.com"
+                                  data-testid="input-email"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="phoneNumbers"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone Number *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="(555) 123-4567"
+                                  data-testid="input-phone"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="homeAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Home Address *</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Enter complete home address"
+                                  data-testid="input-home-address"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>Sensitive information - secured</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="mailingAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Mailing Address</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Enter mailing address (if different)"
+                                  data-testid="input-mailing-address"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Practice Tab */}
+                <TabsContent value="practice">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-primary" />
+                        Practice Information
+                      </CardTitle>
+                      <CardDescription>
+                        Practice details and facility information
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="practiceName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Practice/Facility Name *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Enter practice name"
+                                  data-testid="input-practice-name"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="groupNpi"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Group NPI</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Group NPI (if applicable)"
+                                  data-testid="input-group-npi"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="officePhone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Office Phone *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="(555) 123-4567"
+                                  data-testid="input-office-phone"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="officeFax"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Office Fax</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="(555) 123-4567"
+                                  data-testid="input-office-fax"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="officeContactPerson"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Office Contact Person</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Primary contact name"
+                                  data-testid="input-contact-person"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="groupTaxId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Group Tax ID</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Group tax identification"
+                                  data-testid="input-group-tax-id"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>Sensitive information - secured</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="primaryPracticeAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Primary Practice Address *</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Enter complete practice address"
+                                  data-testid="input-primary-address"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="secondaryPracticeAddresses"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Secondary Practice Addresses</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  placeholder="Additional practice locations (if any)"
+                                  data-testid="input-secondary-address"
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Licensure Tab - Placeholder for future implementation */}
+                <TabsContent value="licensure">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-primary" />
+                        Licensure Information
+                      </CardTitle>
+                      <CardDescription>
+                        Medical licenses and certifications
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Licensure information will be added after the initial physician profile is created.
+                        </AlertDescription>
+                      </Alert>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Education Tab - Placeholder for future implementation */}
+                <TabsContent value="education">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <GraduationCap className="h-5 w-5 text-primary" />
+                        Education Information
+                      </CardTitle>
+                      <CardDescription>
+                        Medical education and training history
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Education information will be added after the initial physician profile is created.
+                        </AlertDescription>
+                      </Alert>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Documents Tab - Placeholder for future implementation */}
+                <TabsContent value="documents">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        Document Uploads
+                      </CardTitle>
+                      <CardDescription>
+                        Upload required documents and certificates
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Document uploads will be available after the initial physician profile is created.
+                        </AlertDescription>
+                      </Alert>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+
+              {/* Save Actions */}
+              <div className="flex justify-between pt-6">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  data-testid="button-save-draft"
+                >
+                  Save as Draft
+                </Button>
+                <div className="flex gap-3">
+                  <Button 
+                    type="button" 
+                    variant="outline"
+                    onClick={() => {
+                      const currentIndex = tabSections.findIndex(tab => tab.id === currentTab);
+                      if (currentIndex > 0) {
+                        setCurrentTab(tabSections[currentIndex - 1].id);
+                      }
+                    }}
+                    disabled={tabSections.findIndex(tab => tab.id === currentTab) === 0}
+                    data-testid="button-previous"
+                  >
+                    Previous
+                  </Button>
+                  {currentTab === "practice" ? (
+                    <Button 
+                      type="submit" 
+                      className="gap-2 bg-gradient-to-r from-primary to-accent"
+                      disabled={createPhysicianMutation.isPending}
+                      data-testid="button-create-physician"
+                    >
+                      {createPhysicianMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Create Physician
+                    </Button>
+                  ) : (
+                    <Button 
+                      type="button"
+                      className="gap-2 bg-gradient-to-r from-primary to-accent"
+                      onClick={() => {
+                        const currentIndex = tabSections.findIndex(tab => tab.id === currentTab);
+                        if (currentIndex < tabSections.length - 1) {
+                          setCurrentTab(tabSections[currentIndex + 1].id);
+                        }
+                      }}
+                      data-testid="button-next"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save & Continue
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </form>
+      </Form>
     </div>
   );
 }
