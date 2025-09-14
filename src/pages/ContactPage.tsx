@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -474,8 +474,8 @@ export default function ContactPage() {
                     const isExpanded = expandedRows.has(physician.id);
                     
                     return (
-                      <>
-                        <TableRow key={physician.id} className="hover:bg-muted/20" data-testid={`row-contact-${physician.id}`}>
+                      <Fragment key={physician.id}>
+                        <TableRow className="hover:bg-muted/20" data-testid={`row-contact-${physician.id}`}>
                           <TableCell>
                             <Button
                               variant="ghost"
@@ -487,10 +487,12 @@ export default function ContactPage() {
                             </Button>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/physicians/${physician.id}`}>
-                              <a className="font-medium text-primary hover:underline" data-testid={`link-physician-${physician.id}`}>
-                                {physician.fullLegalName}
-                              </a>
+                            <Link 
+                              href={`/physicians/${physician.id}`}
+                              className="font-medium text-primary hover:underline" 
+                              data-testid={`link-physician-${physician.id}`}
+                            >
+                              {physician.fullLegalName}
                             </Link>
                           </TableCell>
                           <TableCell>
@@ -661,7 +663,7 @@ export default function ContactPage() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })
                 )}

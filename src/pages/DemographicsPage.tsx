@@ -450,10 +450,12 @@ export default function DemographicsPage() {
                   filteredPhysicians.map((physician: SelectPhysician) => (
                     <TableRow key={physician.id} className="hover:bg-muted/20" data-testid={`row-physician-${physician.id}`}>
                       <TableCell>
-                        <Link href={`/physicians/${physician.id}`}>
-                          <button className="font-medium text-primary hover:underline text-left" data-testid={`link-physician-${physician.id}`}>
-                            {physician.fullLegalName}
-                          </button>
+                        <Link 
+                          href={`/physicians/${physician.id}`}
+                          className="font-medium text-primary hover:underline text-left" 
+                          data-testid={`link-physician-${physician.id}`}
+                        >
+                          {physician.fullLegalName}
                         </Link>
                       </TableCell>
                       <TableCell>
