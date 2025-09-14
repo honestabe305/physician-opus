@@ -14,7 +14,7 @@ const PORT = process.env.NODE_ENV === 'production'
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? true  // Allow all origins in production for Replit deployment
-    : ['http://localhost:5000', 'http://localhost:8080'],
+    : ['http://localhost:5000'],
   credentials: true
 }));
 
