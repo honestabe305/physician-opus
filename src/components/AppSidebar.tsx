@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 import {
   Users,
   UserPlus,
@@ -56,8 +56,8 @@ const navigation = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const [location] = useLocation();
+  const currentPath = location;
   const collapsed = state === "collapsed";
 
   const isActive = (path: string) => currentPath === path;
@@ -77,19 +77,17 @@ export function AppSidebar() {
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
-                      <NavLink
+                      <Link
                         to={item.url}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                            isActive
-                              ? "bg-primary text-primary-foreground font-medium"
-                              : "text-foreground/90 hover:text-foreground hover:bg-muted"
-                          }`
-                        }
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                          isActive(item.url)
+                            ? "bg-primary text-primary-foreground font-medium"
+                            : "text-foreground/90 hover:text-foreground hover:bg-muted"
+                        }`}
                       >
                         <item.icon className="h-4 w-4 flex-shrink-0" />
                         {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
-                      </NavLink>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
