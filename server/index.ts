@@ -4,10 +4,10 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-// Use PORT env var in production (defaults to 8080 for deployment), port 3001 in development
-// Match the .replit port configuration which maps 8080 to external port 80
+// Use PORT env var in production (defaults to 5000), port 3001 in development  
+// Port 5000 is mapped to external access in .replit configuration
 const PORT = process.env.NODE_ENV === 'production' 
-  ? parseInt(process.env.PORT || '8080', 10)  // Use PORT env var if available, default to 8080 to match .replit config
+  ? parseInt(process.env.PORT || '5000', 10)  // Use PORT env var if available, default to 5000
   : parseInt(process.env.BACKEND_PORT || '3001', 10);
 
 // Middleware setup
