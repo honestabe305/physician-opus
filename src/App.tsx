@@ -13,6 +13,7 @@ import RouteMonitor from "./components/RouteMonitor";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PhysiciansPage = lazy(() => import("./pages/PhysiciansPage"));
 const NewPhysicianPage = lazy(() => import("./pages/NewPhysicianPage"));
+const PhysicianProfilePage = lazy(() => import("./pages/PhysicianProfilePage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const DemographicsPage = lazy(() => import("./pages/DemographicsPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
@@ -38,6 +39,7 @@ const App = () => (
                 <Route path="/" component={Dashboard} />
                 <Route path="/physicians" component={PhysiciansPage} />
                 <Route path="/physicians/new" component={NewPhysicianPage} />
+                <Route path="/physicians/:id" component={PhysicianProfilePage} />
                 <Route path="/search" component={SearchPage} />
                 <Route path="/demographics" component={DemographicsPage} />
                 <Route path="/contact" component={ContactPage} />
