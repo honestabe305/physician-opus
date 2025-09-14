@@ -7,7 +7,7 @@ packages = ["jq"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["npm", "start"]
+run = ["NODE_ENV=production", "PORT=80", "tsx", "server/index.ts"]
 
 [workflows]
 runButton = "Project"
