@@ -7,6 +7,7 @@ import { queryClient } from "@/lib/queryClient";
 import { Router, Route, Switch } from "wouter";
 import Layout from "./components/Layout";
 import PageLoader from "./components/PageLoader";
+import RouteMonitor from "./components/RouteMonitor";
 
 // Lazy load all page components for code splitting
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -30,25 +31,27 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Router>
-        <Layout>
-          <Suspense fallback={<PageLoader />}>
-            <Switch>
-              <Route path="/" component={Dashboard} />
-              <Route path="/physicians" component={PhysiciansPage} />
-              <Route path="/physicians/new" component={NewPhysicianPage} />
-              <Route path="/search" component={SearchPage} />
-              <Route path="/demographics" component={DemographicsPage} />
-              <Route path="/contact" component={ContactPage} />
-              <Route path="/practice" component={PracticePage} />
-              <Route path="/licensure" component={LicensurePage} />
-              <Route path="/education" component={EducationPage} />
-              <Route path="/work-history" component={WorkHistoryPage} />
-              <Route path="/documents" component={DocumentsPage} />
-              <Route path="/settings" component={SettingsPage} />
-              <Route component={NotFound} />
-            </Switch>
-          </Suspense>
-        </Layout>
+        <RouteMonitor>
+          <Layout>
+            <Suspense fallback={<PageLoader />}>
+              <Switch>
+                <Route path="/" component={Dashboard} />
+                <Route path="/physicians" component={PhysiciansPage} />
+                <Route path="/physicians/new" component={NewPhysicianPage} />
+                <Route path="/search" component={SearchPage} />
+                <Route path="/demographics" component={DemographicsPage} />
+                <Route path="/contact" component={ContactPage} />
+                <Route path="/practice" component={PracticePage} />
+                <Route path="/licensure" component={LicensurePage} />
+                <Route path="/education" component={EducationPage} />
+                <Route path="/work-history" component={WorkHistoryPage} />
+                <Route path="/documents" component={DocumentsPage} />
+                <Route path="/settings" component={SettingsPage} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </Layout>
+        </RouteMonitor>
       </Router>
     </TooltipProvider>
   </QueryClientProvider>
