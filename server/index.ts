@@ -4,11 +4,8 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-// Use PORT env var in production (defaults to 5000), port 3001 in development  
-// Port 5000 is mapped to external access in .replit configuration
-const PORT = process.env.NODE_ENV === 'production' 
-  ? parseInt(process.env.PORT || '5000', 10)  // Use PORT env var if available, default to 5000
-  : parseInt(process.env.BACKEND_PORT || '3001', 10);
+// Use PORT env var (defaults to 5000)
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Middleware setup
 app.use(cors({
