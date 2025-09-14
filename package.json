@@ -7,9 +7,10 @@
     "dev": "concurrently \"vite\" \"tsx server/index.ts\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "start": "NODE_ENV=production vite build && NODE_ENV=production tsx server/index.ts",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "build:start": "npm run build && npm run start",
     "lint": "eslint .",
-    "preview": "vite preview",
+    "preview": "vite preview --host 0.0.0.0 --port $PORT",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate"
