@@ -30,13 +30,6 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api', router);
 
-// Serve frontend for all non-API routes in production (client-side routing)
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
-  });
-}
-
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
@@ -64,6 +57,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
+
+// Serve frontend for all other routes in production (client-side routing fallback)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res) => {
+    res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+  });
+}
 
 // Start server
 app.listen(PORT, () => {
