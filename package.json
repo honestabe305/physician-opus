@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"tsx server/index.ts\"",
+    "dev": "concurrently \"vite\" \"PORT=3001 tsx server/index.ts\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "start": "NODE_ENV=production tsx server/index.ts",
+    "start:prod": "NODE_ENV=production PORT=${PORT:-5000} tsx server/index.ts",
     "build:start": "npm run build && npm run start",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0 --port $PORT",
