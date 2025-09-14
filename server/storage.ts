@@ -10,6 +10,7 @@ import {
   physicianHospitalAffiliations,
   physicianCompliance,
   physicianDocuments,
+  userSettings,
   type SelectProfile,
   type InsertProfile,
   type SelectPhysician,
@@ -28,6 +29,8 @@ import {
   type InsertPhysicianCompliance,
   type SelectPhysicianDocument,
   type InsertPhysicianDocument,
+  type SelectUserSettings,
+  type InsertUserSettings,
 } from '../shared/schema';
 
 // Storage interface definition
@@ -101,6 +104,13 @@ export interface IStorage {
   getPhysicianDocumentsByType(physicianId: string, documentType: string): Promise<SelectPhysicianDocument[]>;
   updatePhysicianDocument(id: string, updates: Partial<InsertPhysicianDocument>): Promise<SelectPhysicianDocument>;
   deletePhysicianDocument(id: string): Promise<void>;
+
+  // User Settings operations
+  createUserSettings(settings: InsertUserSettings): Promise<SelectUserSettings>;
+  getUserSettings(userId: string): Promise<SelectUserSettings | null>;
+  getUserSettingsById(id: string): Promise<SelectUserSettings | null>;
+  updateUserSettings(userId: string, updates: Partial<InsertUserSettings>): Promise<SelectUserSettings>;
+  deleteUserSettings(userId: string): Promise<void>;
 
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
@@ -760,6 +770,66 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting physician document:', error);
       throw new Error(`Failed to delete physician document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // User Settings operations
+  async createUserSettings(settings: InsertUserSettings): Promise<SelectUserSettings> {
+    try {
+      const [result] = await db.insert(userSettings).values(settings).returning();
+      if (!result) {
+        throw new Error('Failed to create user settings');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating user settings:', error);
+      throw new Error(`Failed to create user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserSettings(userId: string): Promise<SelectUserSettings | null> {
+    try {
+      const [result] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting user settings:', error);
+      throw new Error(`Failed to get user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserSettingsById(id: string): Promise<SelectUserSettings | null> {
+    try {
+      const [result] = await db.select().from(userSettings).where(eq(userSettings.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting user settings by id:', error);
+      throw new Error(`Failed to get user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateUserSettings(userId: string, updates: Partial<InsertUserSettings>): Promise<SelectUserSettings> {
+    try {
+      const [result] = await db
+        .update(userSettings)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(userSettings.userId, userId))
+        .returning();
+      if (!result) {
+        throw new Error('User settings not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating user settings:', error);
+      throw new Error(`Failed to update user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteUserSettings(userId: string): Promise<void> {
+    try {
+      await db.delete(userSettings).where(eq(userSettings.userId, userId));
+    } catch (error) {
+      console.error('Error deleting user settings:', error);
+      throw new Error(`Failed to delete user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

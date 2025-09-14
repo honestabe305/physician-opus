@@ -10,6 +10,7 @@ import {
   insertPhysicianHospitalAffiliationSchema,
   insertPhysicianComplianceSchema,
   insertPhysicianDocumentSchema,
+  insertUserSettingsSchema,
   type SelectPhysician,
   type SelectPhysicianLicense,
   type SelectPhysicianCertification,
@@ -17,7 +18,8 @@ import {
   type SelectPhysicianWorkHistory,
   type SelectPhysicianHospitalAffiliation,
   type SelectPhysicianCompliance,
-  type SelectPhysicianDocument
+  type SelectPhysicianDocument,
+  type SelectUserSettings
 } from '../shared/schema';
 import { z } from 'zod';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
@@ -538,6 +540,58 @@ router.get('/documents/:id/download', asyncHandler(async (req: any, res: any) =>
     }
     return res.status(500).json({ error: 'Failed to download document' });
   }
+}));
+
+// User Settings routes
+router.post('/user-settings', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertUserSettingsSchema.parse(req.body);
+  const settings = await storage.createUserSettings(validatedData);
+  res.status(201).json(settings);
+}));
+
+router.get('/user-settings/:userId', asyncHandler(async (req: any, res: any) => {
+  const settings = await storage.getUserSettings(req.params.userId);
+  if (!settings) {
+    return res.status(404).json({ error: 'User settings not found' });
+  }
+  res.json(settings);
+}));
+
+router.put('/user-settings/:userId', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertUserSettingsSchema.partial().parse(req.body);
+  try {
+    const settings = await storage.updateUserSettings(req.params.userId, validatedData);
+    res.json(settings);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not found')) {
+      return res.status(404).json({ error: 'User settings not found' });
+    }
+    throw error;
+  }
+}));
+
+router.delete('/user-settings/:userId', asyncHandler(async (req: any, res: any) => {
+  await storage.deleteUserSettings(req.params.userId);
+  res.status(204).send();
+}));
+
+// System Information route
+router.get('/system/info', asyncHandler(async (req: any, res: any) => {
+  const physicians = await storage.getAllPhysicians();
+  const profiles = await storage.getAllProfiles();
+  
+  res.json({
+    version: '1.0.0',
+    buildDate: new Date().toISOString(),
+    databaseStatus: 'connected',
+    totalPhysicians: physicians.length,
+    totalProfiles: profiles.length,
+    systemHealth: 'healthy',
+    uptime: process.uptime(),
+    nodeVersion: process.version,
+    platform: process.platform,
+    architecture: process.arch
+  });
 }));
 
 export { router };

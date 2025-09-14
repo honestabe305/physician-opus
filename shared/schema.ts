@@ -25,6 +25,42 @@ export const profiles = pgTable('profiles', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+export const userSettings = pgTable('user_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().unique().references(() => profiles.userId),
+  
+  // Application Preferences
+  theme: text('theme').default('system'), // 'light', 'dark', 'system'
+  language: text('language').default('en'),
+  timezone: text('timezone').default('America/New_York'),
+  dateFormat: text('date_format').default('MM/dd/yyyy'),
+  timeFormat: text('time_format').default('12'), // '12' or '24'
+  
+  // Notification Settings
+  emailNotifications: boolean('email_notifications').default(true),
+  desktopNotifications: boolean('desktop_notifications').default(true),
+  smsNotifications: boolean('sms_notifications').default(false),
+  
+  // Data Management Preferences
+  defaultPageSize: integer('default_page_size').default(25),
+  autoSaveInterval: integer('auto_save_interval').default(300), // seconds
+  showArchived: boolean('show_archived').default(false),
+  
+  // Security Settings
+  sessionTimeout: integer('session_timeout').default(3600), // seconds
+  twoFactorEnabled: boolean('two_factor_enabled').default(false),
+  
+  // Advanced Settings
+  debugMode: boolean('debug_mode').default(false),
+  dataRetentionDays: integer('data_retention_days').default(2555), // 7 years
+  
+  // Custom preferences as JSON
+  customPreferences: jsonb('custom_preferences'), // flexible settings storage
+  
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const physicians = pgTable('physicians', {
   id: uuid('id').defaultRandom().primaryKey(),
   fullLegalName: text('full_legal_name').notNull(),
@@ -230,3 +266,11 @@ export const insertPhysicianDocumentSchema = createInsertSchema(physicianDocumen
 });
 export type InsertPhysicianDocument = typeof physicianDocuments.$inferInsert;
 export type SelectPhysicianDocument = typeof physicianDocuments.$inferSelect;
+
+export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertUserSettings = typeof userSettings.$inferInsert;
+export type SelectUserSettings = typeof userSettings.$inferSelect;
