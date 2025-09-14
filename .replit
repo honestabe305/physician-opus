@@ -2,12 +2,11 @@ modules = ["nodejs-20", "web", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["jq"]
 
 [deployment]
 deploymentTarget = "autoscale"
+run = ["npx", "tsx", "server/index.ts"]
 build = ["npm", "run", "build"]
-run = ["npm", "start"]
 
 [workflows]
 runButton = "Project"
@@ -19,10 +18,14 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "PhysicianCRM"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backend Server"
 
 [[workflows.workflow]]
-name = "PhysicianCRM"
+name = "Start application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -30,11 +33,20 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Backend Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && npx tsx index.ts"
+waitForPort = 3001
+
 [workflows.workflow.metadata]
-outputType = "webview"
+outputType = "console"
 
 [agent]
-integrations = ["javascript_database:1.0.0", "javascript_object_storage:1.0.0"]
+integrations = ["javascript_database:1.0.0"]
 expertMode = true
 
 [[ports]]
@@ -46,28 +58,17 @@ localPort = 5000
 externalPort = 5000
 
 [[ports]]
-localPort = 5001
-externalPort = 3003
-""
+localPort = 8080
+externalPort = 80
+
 [[ports]]
 localPort = 33167
 externalPort = 3000
 
 [[ports]]
-localPort = 33593
-externalPort = 4200""
-
-[[ports]]
-localPort = 36029
-externalPort = 6000
-
-[[ports]]
-localPort = 42591
-externalPort = 5173
+localPort = 34491
+externalPort = 3003
 
 [[ports]]
 localPort = 43907
 externalPort = 3002
-
-[objectStorage]
-defaultBucketID = "replit-objstore-eff1b6bc-faa1-48ef-ba40-694ef25d01d6"
