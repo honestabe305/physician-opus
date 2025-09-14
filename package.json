@@ -8,7 +8,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -52,6 +55,7 @@
     "date-fns": "^3.6.0",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.44.5",
+    "drizzle-zod": "^0.8.3",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.1.0",
     "input-otp": "^1.4.2",
