@@ -4,10 +4,10 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-// Always use port 5000 in production, port 3001 in development
-// Production deployments require port 5000 specifically
+// Use PORT env var in production (defaults to 5000), port 3001 in development
+// This allows deployment platforms to specify their preferred port
 const PORT = process.env.NODE_ENV === 'production' 
-  ? 5000  // Force port 5000 for production deployments
+  ? parseInt(process.env.PORT || '5000', 10)  // Use PORT env var if available, default to 5000
   : parseInt(process.env.BACKEND_PORT || '3001', 10);
 
 // Middleware setup
