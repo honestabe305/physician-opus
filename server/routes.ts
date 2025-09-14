@@ -521,11 +521,6 @@ router.post('/documents', asyncHandler(async (req: any, res: any) => {
   res.status(201).json(document);
 }));
 
-router.get('/physicians/:physicianId/documents', asyncHandler(async (req: any, res: any) => {
-  const documents = await storage.getPhysicianDocuments(req.params.physicianId);
-  res.json(documents);
-}));
-
 router.get('/documents/:id/download', asyncHandler(async (req: any, res: any) => {
   try {
     const document = await storage.getPhysicianDocument(req.params.id);
@@ -543,11 +538,6 @@ router.get('/documents/:id/download', asyncHandler(async (req: any, res: any) =>
     }
     return res.status(500).json({ error: 'Failed to download document' });
   }
-}));
-
-router.delete('/documents/:id', asyncHandler(async (req: any, res: any) => {
-  await storage.deletePhysicianDocument(req.params.id);
-  res.status(204).send();
 }));
 
 export { router };
