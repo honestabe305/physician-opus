@@ -20,6 +20,7 @@ import {
   type SelectPhysicianDocument
 } from '../shared/schema';
 import { z } from 'zod';
+import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
 
 const router = Router();
 const storage = new PostgreSQLStorage();
@@ -492,6 +493,61 @@ router.post('/physicians/bulk', asyncHandler(async (req: any, res: any) => {
     results,
     errors
   });
+}));
+
+// Document Upload routes
+router.post('/documents/upload-url/:physicianId', asyncHandler(async (req: any, res: any) => {
+  const { physicianId } = req.params;
+  
+  // Verify physician exists
+  const physician = await storage.getPhysician(physicianId);
+  if (!physician) {
+    return res.status(404).json({ error: 'Physician not found' });
+  }
+  
+  try {
+    const objectStorageService = new ObjectStorageService();
+    const uploadURL = await objectStorageService.getDocumentUploadURL(physicianId);
+    res.json({ uploadURL });
+  } catch (error) {
+    console.error('Error generating upload URL:', error);
+    res.status(500).json({ error: 'Failed to generate upload URL' });
+  }
+}));
+
+router.post('/documents', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertPhysicianDocumentSchema.parse(req.body);
+  const document = await storage.createPhysicianDocument(validatedData);
+  res.status(201).json(document);
+}));
+
+router.get('/physicians/:physicianId/documents', asyncHandler(async (req: any, res: any) => {
+  const documents = await storage.getPhysicianDocuments(req.params.physicianId);
+  res.json(documents);
+}));
+
+router.get('/documents/:id/download', asyncHandler(async (req: any, res: any) => {
+  try {
+    const document = await storage.getPhysicianDocument(req.params.id);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    const objectStorageService = new ObjectStorageService();
+    const file = await objectStorageService.getDocumentFile(document.filePath);
+    await objectStorageService.downloadDocument(file, res);
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    if (error instanceof ObjectNotFoundError) {
+      return res.status(404).json({ error: 'Document file not found' });
+    }
+    return res.status(500).json({ error: 'Failed to download document' });
+  }
+}));
+
+router.delete('/documents/:id', asyncHandler(async (req: any, res: any) => {
+  await storage.deletePhysicianDocument(req.params.id);
+  res.status(204).send();
 }));
 
 export { router };

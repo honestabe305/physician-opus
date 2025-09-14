@@ -45,7 +45,7 @@ waitForPort = 3001
 outputType = "console"
 
 [agent]
-integrations = ["javascript_database:1.0.0"]
+integrations = ["javascript_database:1.0.0", "javascript_object_storage:1.0.0"]
 expertMode = true
 
 [[ports]]
@@ -69,9 +69,16 @@ localPort = 33167
 externalPort = 3000
 
 [[ports]]
+localPort = 39745
+externalPort = 4200
+
+[[ports]]
 localPort = 42877
 externalPort = 5173
 
 [[ports]]
 localPort = 43907
 externalPort = 3002
+
+[objectStorage]
+defaultBucketID = "replit-objstore-eff1b6bc-faa1-48ef-ba40-694ef25d01d6"
