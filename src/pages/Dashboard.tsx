@@ -35,19 +35,19 @@ interface ExpirationReport {
 export default function Dashboard() {
   // Fetch physician status summary
   const { data: statusSummary, isLoading: isLoadingStatus, error: statusError } = useQuery<PhysicianStatusSummary>({
-    queryKey: ['/api/analytics/physicians/status-summary'],
+    queryKey: ['/analytics/physicians/status-summary'],
   });
 
   // Fetch license expiration report
   const { data: licenseReport, isLoading: isLoadingLicenses } = useQuery<ExpirationReport>({
-    queryKey: ['/api/analytics/licenses/expiration-report', { days: 30 }],
-    queryFn: () => apiRequest('/api/analytics/licenses/expiration-report?days=30'),
+    queryKey: ['/analytics/licenses/expiration-report', { days: 30 }],
+    queryFn: () => apiRequest('/analytics/licenses/expiration-report?days=30'),
   });
 
   // Fetch certification expiration report
   const { data: certificationReport, isLoading: isLoadingCertifications } = useQuery<ExpirationReport>({
-    queryKey: ['/api/analytics/certifications/expiration-report', { days: 30 }],
-    queryFn: () => apiRequest('/api/analytics/certifications/expiration-report?days=30'),
+    queryKey: ['/analytics/certifications/expiration-report', { days: 30 }],
+    queryFn: () => apiRequest('/analytics/certifications/expiration-report?days=30'),
   });
 
   // Calculate stats from real data

@@ -85,7 +85,7 @@ export function DocumentUploader({ physicianId, onUploadComplete }: DocumentUplo
 
     try {
       // Step 1: Get upload URL from backend
-      const { uploadURL } = await apiRequest(`/api/documents/upload-url/${physicianId}`, {
+      const { uploadURL } = await apiRequest(`/documents/upload-url/${physicianId}`, {
         method: 'POST'
       });
 
@@ -109,7 +109,7 @@ export function DocumentUploader({ physicianId, onUploadComplete }: DocumentUplo
       // Step 3: Create document record in database
       const objectPath = new URL(uploadURL).pathname.split('/').slice(2).join('/');
       
-      await apiRequest('/api/documents', {
+      await apiRequest('/documents', {
         method: 'POST',
         body: JSON.stringify({
           physicianId,

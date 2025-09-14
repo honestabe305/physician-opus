@@ -16,14 +16,14 @@ export default function DocumentsPage() {
 
   // Get all physicians for selection
   const { data: physiciansData } = useQuery({
-    queryKey: ['/api/physicians'],
+    queryKey: ['/physicians'],
     enabled: true,
   });
 
   // Get documents for selected physician
   const { data: documentsData, refetch: refetchDocuments } = useQuery({
-    queryKey: ['/api/physicians', selectedPhysicianId, 'documents'],
-    queryFn: () => apiRequest(`/api/physicians/${selectedPhysicianId}/documents`),
+    queryKey: ['/physicians', selectedPhysicianId, 'documents'],
+    queryFn: () => apiRequest(`/physicians/${selectedPhysicianId}/documents`),
     enabled: !!selectedPhysicianId,
   });
 
@@ -50,7 +50,7 @@ export default function DocumentsPage() {
     if (!confirm('Are you sure you want to delete this document?')) return;
     
     try {
-      await apiRequest(`/api/documents/${documentId}`, { method: 'DELETE' });
+      await apiRequest(`/documents/${documentId}`, { method: 'DELETE' });
       refetchDocuments();
     } catch (error) {
       console.error('Delete error:', error);

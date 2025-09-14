@@ -43,12 +43,38 @@ import {
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { insertPhysicianSchema, type InsertPhysician } from "@shared/schema";
+import { insertPhysicianSchema, type InsertPhysician } from "../../shared/schema";
 import { z } from "zod";
 
-const physicianFormSchema = insertPhysicianSchema.extend({
-  phoneNumbers: z.string().optional(),
-  secondaryPracticeAddresses: z.string().optional(),
+// Create a form schema based on the physician insert type but with string fields for arrays
+const physicianFormSchema = z.object({
+  fullLegalName: z.string(),
+  dateOfBirth: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  ssn: z.string().optional(),
+  npi: z.string().optional(),
+  tin: z.string().optional(),
+  deaNumber: z.string().optional(),
+  caqhId: z.string().optional(),
+  homeAddress: z.string().optional(),
+  mailingAddress: z.string().optional(),
+  phoneNumbers: z.string().optional(), // String in form, will convert to array for API
+  emailAddress: z.string().optional(),
+  emergencyContact: z.any().optional(),
+  practiceName: z.string().optional(),
+  primaryPracticeAddress: z.string().optional(),
+  secondaryPracticeAddresses: z.string().optional(), // String in form, will convert to array for API
+  officePhone: z.string().optional(),
+  officeFax: z.string().optional(),
+  officeContactPerson: z.string().optional(),
+  groupNpi: z.string().optional(),
+  groupTaxId: z.string().optional(),
+  malpracticeCarrier: z.string().optional(),
+  malpracticePolicyNumber: z.string().optional(),
+  coverageLimits: z.string().optional(),
+  malpracticeExpirationDate: z.string().optional(),
+  status: z.string().optional(),
+  createdBy: z.string().optional(),
 });
 
 type PhysicianFormData = z.infer<typeof physicianFormSchema>;
@@ -91,7 +117,7 @@ export default function NewPhysicianPage() {
   const createPhysicianMutation = useMutation({
     mutationFn: async (data: PhysicianFormData) => {
       // Transform form data to match API expectations
-      const apiData: InsertPhysician = {
+      const apiData = {
         ...data,
         phoneNumbers: data.phoneNumbers ? [data.phoneNumbers] : undefined,
         secondaryPracticeAddresses: data.secondaryPracticeAddresses 
@@ -100,9 +126,12 @@ export default function NewPhysicianPage() {
         malpracticeExpirationDate: data.malpracticeExpirationDate || undefined,
       };
       
-      return apiRequest('/api/physicians', {
+      return apiRequest('/physicians', {
         method: 'POST',
-        body: apiData,
+        body: JSON.stringify(apiData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
     },
     onSuccess: (data) => {
@@ -110,7 +139,7 @@ export default function NewPhysicianPage() {
         title: "Success",
         description: "Physician profile created successfully!",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/physicians'] });
+      queryClient.invalidateQueries({ queryKey: ['/physicians'] });
       setLocation('/physicians');
     },
     onError: (error) => {

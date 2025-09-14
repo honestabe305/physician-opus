@@ -22,7 +22,7 @@ import {
   AlertCircle,
   FileText,
 } from "lucide-react";
-import type { SelectPhysician } from "@shared/schema";
+import type { SelectPhysician } from "../../shared/schema";
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,10 +48,10 @@ export default function SearchPage() {
 
   // Fetch search results
   const { data: searchData, isLoading, error } = useQuery({
-    queryKey: ['/api/physicians', { search: debouncedSearch, status: statusFilter }],
+    queryKey: ['/physicians', { search: debouncedSearch, status: statusFilter }],
     queryFn: () => {
       const queryParams = buildQueryParams();
-      return apiRequest(`/api/physicians${queryParams ? `?${queryParams}` : ''}`);
+      return apiRequest(`/physicians${queryParams ? `?${queryParams}` : ''}`);
     },
     enabled: !!debouncedSearch || !!statusFilter, // Only search when there's a query or filter
   });

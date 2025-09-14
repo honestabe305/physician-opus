@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link } from "wouter";
-import type { SelectPhysician } from "@shared/schema";
+import type { SelectPhysician } from "../../shared/schema";
 
 export default function PhysiciansPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,10 +48,10 @@ export default function PhysiciansPage() {
 
   // Fetch physicians data
   const { data: physiciansData, isLoading, error } = useQuery({
-    queryKey: debouncedSearch ? ['/api/physicians', { search: debouncedSearch }] : ['/api/physicians'],
+    queryKey: debouncedSearch ? ['/physicians', { search: debouncedSearch }] : ['/physicians'],
     queryFn: () => {
       const params = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : '';
-      return apiRequest(`/api/physicians${params}`);
+      return apiRequest(`/physicians${params}`);
     },
   });
 
