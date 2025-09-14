@@ -4,9 +4,10 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-// In development, run backend on 3001, in production run on 5000 (unified server)
+// Always use port 5000 in production, port 3001 in development
+// Production deployments require port 5000 specifically
 const PORT = process.env.NODE_ENV === 'production' 
-  ? parseInt(process.env.PORT || '5000', 10)
+  ? 5000  // Force port 5000 for production deployments
   : parseInt(process.env.BACKEND_PORT || '3001', 10);
 
 // Middleware setup
@@ -87,7 +88,11 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Serve frontend for all other routes in production (SPA fallback)
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  app.use((req, res, next) => {
+    // Skip API routes and static files
+    if (req.path.startsWith('/api') || req.path.includes('.')) {
+      return next();
+    }
     res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
   });
 }
