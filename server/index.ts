@@ -4,7 +4,10 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+// In development, run backend on 3001, in production run on 5000 (unified server)
+const PORT = process.env.NODE_ENV === 'production' 
+  ? parseInt(process.env.PORT || '5000', 10)
+  : parseInt(process.env.BACKEND_PORT || '3001', 10);
 
 // Middleware setup
 app.use(cors({
