@@ -5,7 +5,6 @@ channel = "stable-25_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["npx", "tsx", "server/index.ts"]
 build = ["npm", "run", "build"]
 
 [workflows]
@@ -70,7 +69,7 @@ localPort = 33167
 externalPort = 3000
 
 [[ports]]
-localPort = 43307
+localPort = 33189
 externalPort = 4200
 
 [[ports]]
