@@ -1,7 +1,7 @@
 import { boolean, date, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
-import { z, type ZodType } from 'zod';
+import { z } from 'zod';
 
 // Enums
 export const genderTypeEnum = pgEnum('gender_type', ['male', 'female', 'other', 'prefer_not_to_say']);
@@ -163,70 +163,70 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertProfile = z.infer<typeof insertProfileSchema>;
+});
+export type InsertProfile = typeof profiles.$inferInsert;
 export type SelectProfile = typeof profiles.$inferSelect;
 
 export const insertPhysicianSchema = createInsertSchema(physicians).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysician = z.infer<typeof insertPhysicianSchema>;
+});
+export type InsertPhysician = typeof physicians.$inferInsert;
 export type SelectPhysician = typeof physicians.$inferSelect;
 
 export const insertPhysicianLicenseSchema = createInsertSchema(physicianLicenses).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianLicense = z.infer<typeof insertPhysicianLicenseSchema>;
+});
+export type InsertPhysicianLicense = typeof physicianLicenses.$inferInsert;
 export type SelectPhysicianLicense = typeof physicianLicenses.$inferSelect;
 
 export const insertPhysicianCertificationSchema = createInsertSchema(physicianCertifications).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianCertification = z.infer<typeof insertPhysicianCertificationSchema>;
+});
+export type InsertPhysicianCertification = typeof physicianCertifications.$inferInsert;
 export type SelectPhysicianCertification = typeof physicianCertifications.$inferSelect;
 
 export const insertPhysicianEducationSchema = createInsertSchema(physicianEducation).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianEducation = z.infer<typeof insertPhysicianEducationSchema>;
+});
+export type InsertPhysicianEducation = typeof physicianEducation.$inferInsert;
 export type SelectPhysicianEducation = typeof physicianEducation.$inferSelect;
 
 export const insertPhysicianWorkHistorySchema = createInsertSchema(physicianWorkHistory).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianWorkHistory = z.infer<typeof insertPhysicianWorkHistorySchema>;
+});
+export type InsertPhysicianWorkHistory = typeof physicianWorkHistory.$inferInsert;
 export type SelectPhysicianWorkHistory = typeof physicianWorkHistory.$inferSelect;
 
 export const insertPhysicianHospitalAffiliationSchema = createInsertSchema(physicianHospitalAffiliations).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianHospitalAffiliation = z.infer<typeof insertPhysicianHospitalAffiliationSchema>;
+});
+export type InsertPhysicianHospitalAffiliation = typeof physicianHospitalAffiliations.$inferInsert;
 export type SelectPhysicianHospitalAffiliation = typeof physicianHospitalAffiliations.$inferSelect;
 
 export const insertPhysicianComplianceSchema = createInsertSchema(physicianCompliance).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianCompliance = z.infer<typeof insertPhysicianComplianceSchema>;
+});
+export type InsertPhysicianCompliance = typeof physicianCompliance.$inferInsert;
 export type SelectPhysicianCompliance = typeof physicianCompliance.$inferSelect;
 
 export const insertPhysicianDocumentSchema = createInsertSchema(physicianDocuments).omit({
   id: true,
   createdAt: true,
   updatedAt: true
-}) as unknown as ZodType<any>;
-export type InsertPhysicianDocument = z.infer<typeof insertPhysicianDocumentSchema>;
+});
+export type InsertPhysicianDocument = typeof physicianDocuments.$inferInsert;
 export type SelectPhysicianDocument = typeof physicianDocuments.$inferSelect;
