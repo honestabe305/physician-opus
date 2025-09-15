@@ -193,6 +193,9 @@ export default function WorkHistoryPage() {
   const physicians = physiciansData?.physicians || [];
   const workHistories = workHistoryData?.workHistory || [];
 
+  // Loading state - define early to avoid temporal dead zone issues
+  const isLoading = loadingPhysicians || loadingWorkHistory;
+
   // Create mutation for adding work history
   const addWorkHistoryMutation = useMutation({
     mutationFn: (data: { physicianId: string; workHistory: InsertPhysicianWorkHistory }) =>
@@ -657,8 +660,6 @@ export default function WorkHistoryPage() {
     setIsEditDialogOpen(true);
   };
 
-  // Loading state - moved before statsCards to avoid use-before-declaration
-  const isLoading = loadingPhysicians || loadingWorkHistory;
 
   // Stats cards configuration
   const statsCards = [
