@@ -129,8 +129,9 @@ export default function WorkHistoryPage() {
   const { toast } = useToast();
 
   // Form for adding/editing work history
+  const workHistoryFormSchema = insertPhysicianWorkHistorySchema.omit({ physicianId: true });
   const form = useForm<InsertPhysicianWorkHistory>({
-    resolver: zodResolver(insertPhysicianWorkHistorySchema.omit({ physicianId: true })),
+    resolver: zodResolver(workHistoryFormSchema),
     defaultValues: {
       employerName: "",
       position: "",
@@ -628,6 +629,9 @@ export default function WorkHistoryPage() {
     setIsEditDialogOpen(true);
   };
 
+  // Loading state - moved before statsCards to avoid use-before-declaration
+  const isLoading = loadingPhysicians || loadingWorkHistory;
+
   // Stats cards configuration
   const statsCards = [
     {
@@ -669,8 +673,6 @@ export default function WorkHistoryPage() {
       bgColor: "bg-orange-50 dark:bg-orange-950/20",
     },
   ];
-
-  const isLoading = loadingPhysicians || loadingWorkHistory;
 
   return (
     <div className="space-y-6">

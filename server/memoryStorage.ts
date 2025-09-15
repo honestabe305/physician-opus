@@ -46,7 +46,7 @@ export class MemoryStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date(),
       ...profile,
-      role: profile.role || 'staff'
+      role: profile.role ?? 'staff'
     };
     this.profiles.push(newProfile);
     return newProfile;
@@ -86,8 +86,33 @@ export class MemoryStorage implements IStorage {
       id: this.generateId(),
       createdAt: new Date(),
       updatedAt: new Date(),
-      ...physician,
-      npi: physician.npi || null
+      fullLegalName: physician.fullLegalName,
+      dateOfBirth: physician.dateOfBirth ?? null,
+      gender: physician.gender ?? null,
+      ssn: physician.ssn ?? null,
+      npi: physician.npi ?? null,
+      tin: physician.tin ?? null,
+      deaNumber: physician.deaNumber ?? null,
+      caqhId: physician.caqhId ?? null,
+      homeAddress: physician.homeAddress ?? null,
+      mailingAddress: physician.mailingAddress ?? null,
+      phoneNumbers: physician.phoneNumbers ?? null,
+      emailAddress: physician.emailAddress ?? null,
+      emergencyContact: physician.emergencyContact ?? null,
+      practiceName: physician.practiceName ?? null,
+      primaryPracticeAddress: physician.primaryPracticeAddress ?? null,
+      secondaryPracticeAddresses: physician.secondaryPracticeAddresses ?? null,
+      officePhone: physician.officePhone ?? null,
+      officeFax: physician.officeFax ?? null,
+      officeContactPerson: physician.officeContactPerson ?? null,
+      groupNpi: physician.groupNpi ?? null,
+      groupTaxId: physician.groupTaxId ?? null,
+      malpracticeCarrier: physician.malpracticeCarrier ?? null,
+      malpracticePolicyNumber: physician.malpracticePolicyNumber ?? null,
+      coverageLimits: physician.coverageLimits ?? null,
+      malpracticeExpirationDate: physician.malpracticeExpirationDate ?? null,
+      status: physician.status ?? 'active',
+      createdBy: physician.createdBy ?? null
     };
     this.physicians.push(newPhysician);
     return newPhysician;
@@ -237,7 +262,19 @@ export class MemoryStorage implements IStorage {
 
   // Stub implementations for other operations (return empty results)
   async createPhysicianEducation(education: InsertPhysicianEducation): Promise<SelectPhysicianEducation> {
-    const newEd: SelectPhysicianEducation = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...education };
+    const newEd: SelectPhysicianEducation = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      physicianId: education.physicianId,
+      educationType: education.educationType,
+      institutionName: education.institutionName,
+      specialty: education.specialty ?? null,
+      location: education.location ?? null,
+      startDate: education.startDate ?? null,
+      completionDate: education.completionDate ?? null,
+      graduationYear: education.graduationYear ?? null
+    };
     this.education.push(newEd);
     return newEd;
   }
@@ -262,7 +299,19 @@ export class MemoryStorage implements IStorage {
   }
 
   async createPhysicianWorkHistory(workHistory: InsertPhysicianWorkHistory): Promise<SelectPhysicianWorkHistory> {
-    const newWork: SelectPhysicianWorkHistory = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...workHistory };
+    const newWork: SelectPhysicianWorkHistory = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      physicianId: workHistory.physicianId,
+      employerName: workHistory.employerName,
+      position: workHistory.position ?? null,
+      startDate: workHistory.startDate,
+      endDate: workHistory.endDate ?? null,
+      address: workHistory.address ?? null,
+      supervisorName: workHistory.supervisorName ?? null,
+      reasonForLeaving: workHistory.reasonForLeaving ?? null
+    };
     this.workHistory.push(newWork);
     return newWork;
   }
@@ -287,7 +336,17 @@ export class MemoryStorage implements IStorage {
   }
 
   async createPhysicianHospitalAffiliation(affiliation: InsertPhysicianHospitalAffiliation): Promise<SelectPhysicianHospitalAffiliation> {
-    const newAff: SelectPhysicianHospitalAffiliation = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...affiliation };
+    const newAff: SelectPhysicianHospitalAffiliation = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      physicianId: affiliation.physicianId,
+      hospitalName: affiliation.hospitalName,
+      privileges: affiliation.privileges ?? null,
+      startDate: affiliation.startDate ?? null,
+      endDate: affiliation.endDate ?? null,
+      status: affiliation.status ?? 'active'
+    };
     this.hospitalAffiliations.push(newAff);
     return newAff;
   }
@@ -312,7 +371,20 @@ export class MemoryStorage implements IStorage {
   }
 
   async createPhysicianCompliance(compliance: InsertPhysicianCompliance): Promise<SelectPhysicianCompliance> {
-    const newComp: SelectPhysicianCompliance = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...compliance };
+    const newComp: SelectPhysicianCompliance = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      physicianId: compliance.physicianId,
+      licenseRevocations: compliance.licenseRevocations ?? false,
+      licenseRevocationsExplanation: compliance.licenseRevocationsExplanation ?? null,
+      pendingInvestigations: compliance.pendingInvestigations ?? false,
+      pendingInvestigationsExplanation: compliance.pendingInvestigationsExplanation ?? null,
+      malpracticeClaims: compliance.malpracticeClaims ?? false,
+      malpracticeClaimsExplanation: compliance.malpracticeClaimsExplanation ?? null,
+      medicareSanctions: compliance.medicareSanctions ?? false,
+      medicareSanctionsExplanation: compliance.medicareSanctionsExplanation ?? null
+    };
     this.compliance.push(newComp);
     return newComp;
   }
@@ -337,7 +409,19 @@ export class MemoryStorage implements IStorage {
   }
 
   async createPhysicianDocument(document: InsertPhysicianDocument): Promise<SelectPhysicianDocument> {
-    const newDoc: SelectPhysicianDocument = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...document };
+    const newDoc: SelectPhysicianDocument = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      physicianId: document.physicianId,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      filePath: document.filePath,
+      fileSize: document.fileSize ?? null,
+      mimeType: document.mimeType ?? null,
+      isSensitive: document.isSensitive ?? true,
+      uploadedBy: document.uploadedBy ?? null
+    };
     this.documents.push(newDoc);
     return newDoc;
   }
@@ -366,7 +450,28 @@ export class MemoryStorage implements IStorage {
   }
 
   async createUserSettings(settings: InsertUserSettings): Promise<SelectUserSettings> {
-    const newSettings: SelectUserSettings = { id: this.generateId(), createdAt: new Date(), updatedAt: new Date(), ...settings };
+    const newSettings: SelectUserSettings = {
+      id: this.generateId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      userId: settings.userId,
+      theme: settings.theme ?? 'system',
+      language: settings.language ?? 'en',
+      timezone: settings.timezone ?? 'America/New_York',
+      dateFormat: settings.dateFormat ?? 'MM/dd/yyyy',
+      timeFormat: settings.timeFormat ?? '12',
+      emailNotifications: settings.emailNotifications ?? true,
+      desktopNotifications: settings.desktopNotifications ?? true,
+      smsNotifications: settings.smsNotifications ?? false,
+      defaultPageSize: settings.defaultPageSize ?? 25,
+      autoSaveInterval: settings.autoSaveInterval ?? 300,
+      showArchived: settings.showArchived ?? false,
+      sessionTimeout: settings.sessionTimeout ?? 3600,
+      twoFactorEnabled: settings.twoFactorEnabled ?? false,
+      debugMode: settings.debugMode ?? false,
+      dataRetentionDays: settings.dataRetentionDays ?? 2555,
+      customPreferences: settings.customPreferences ?? null
+    };
     this.userSettings.push(newSettings);
     return newSettings;
   }
