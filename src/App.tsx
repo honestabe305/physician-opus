@@ -26,6 +26,7 @@ const WorkHistoryPage = lazy(() => import("./pages/WorkHistoryPage"));
 const DocumentsPage = lazy(() => import("./pages/DocumentsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PhysicianDocumentsPage = lazy(() => import("./pages/PhysicianDocumentsPage"));
 
 
 const App = () => (
@@ -47,8 +48,9 @@ const App = () => (
                   <Route path="/" component={Dashboard} />
                   <Route path="/physicians" component={PhysiciansPage} />
                   <Route path="/physicians/new" component={NewPhysicianPage} />
-                  <Route path="/physicians/:id/edit" component={EditPhysicianPage} />
                   <Route path="/physicians/:id" component={PhysicianProfilePage} />
+                  <Route path="/physicians/:id/edit" component={EditPhysicianPage} />
+                  <Route path="/physicians/:id/documents" component={PhysicianDocumentsPage} />
                   <Route path="/search" component={SearchPage} />
                   <Route path="/demographics" component={DemographicsPage} />
                   <Route path="/contact" component={ContactPage} />

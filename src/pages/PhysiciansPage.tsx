@@ -226,16 +226,22 @@ export default function PhysiciansPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem className="gap-2" data-testid={`action-view-${physician.id}`}>
-                              <Eye className="h-4 w-4" />
-                              View Details
+                              <Link href={`/physicians/${physician.id}`} className="flex items-center gap-2 w-full">
+                                <Eye className="h-4 w-4" />
+                                View Details
+                              </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="gap-2" data-testid={`action-edit-${physician.id}`}>
-                              <Edit className="h-4 w-4" />
-                              Edit
+                              <Link href={`/physicians/${physician.id}/edit`} className="flex items-center gap-2 w-full">
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="gap-2" data-testid={`action-documents-${physician.id}`}>
-                              <FileText className="h-4 w-4" />
-                              Documents
+                              <Link href={`/physicians/${physician.id}/documents`} className="flex items-center gap-2 w-full">
+                                <FileText className="h-4 w-4" />
+                                Documents
+                              </Link>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
