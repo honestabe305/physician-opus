@@ -48,15 +48,14 @@ export default function PhysiciansPage() {
 
   // Fetch physicians data
   const { data: physiciansData, isLoading, error } = useQuery({
-    queryKey: debouncedSearch ? ['/physicians', { search: debouncedSearch }] : ['/physicians'],
-    queryFn: () => {
-      const params = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : '';
-      return apiRequest(`/physicians${params}`);
-    },
+    queryKey: debouncedSearch ? [`/physicians?search=${encodeURIComponent(debouncedSearch)}`] : ['/physicians'],
+    enabled: true,
+    throwOnError: false,
+    retry: 1,
   });
 
   // Fetch document counts for each physician
-  const physicians = physiciansData?.physicians || [];
+  const physicians = (physiciansData as any)?.physicians || [];
   
   // Helper function to get document count
   const getDocumentCount = (physicianId: string) => {
@@ -137,7 +136,15 @@ export default function PhysiciansPage() {
                   data-testid="input-search-physicians"
                 />
               </div>
-              <Button variant="outline" className="gap-2" data-testid="button-filter">
+              <Button 
+                variant="outline" 
+                className="gap-2" 
+                data-testid="button-filter"
+                onClick={() => {
+                  // TODO: Implement filter functionality
+                  console.log('Filter clicked - functionality to be implemented');
+                }}
+              >
                 <Filter className="h-4 w-4" />
                 Filter
               </Button>
