@@ -13,3 +13,5 @@ externalPort = 3000
 
 [deployment]
 deploymentTarget = "cloudrun"
+build = ["sh", "-c", "npm run build"]
+run = ["sh", "-c", "npm run start:prod"]
