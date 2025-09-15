@@ -98,6 +98,7 @@ import {
 import { Link } from "wouter";
 import type { SelectPhysician, SelectPhysicianWorkHistory, InsertPhysicianWorkHistory } from "../../shared/schema";
 import { insertPhysicianWorkHistorySchema } from "../../shared/schema";
+import { z } from "zod";
 import { format, differenceInYears, differenceInMonths, parseISO } from "date-fns";
 
 interface WorkHistoryWithPhysician extends SelectPhysicianWorkHistory {
@@ -129,8 +130,16 @@ export default function WorkHistoryPage() {
   const { toast } = useToast();
 
   // Form for adding/editing work history
-  const workHistoryFormSchema = insertPhysicianWorkHistorySchema.omit({ physicianId: true });
-  const form = useForm<InsertPhysicianWorkHistory>({
+  const workHistoryFormSchema = z.object({
+    employerName: z.string().min(1, "Employer name is required"),
+    position: z.string().default(""),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().default(""),
+    address: z.string().default(""),
+    supervisorName: z.string().default(""),
+    reasonForLeaving: z.string().default(""),
+  });
+  const form = useForm<z.infer<typeof workHistoryFormSchema>>({
     resolver: zodResolver(workHistoryFormSchema),
     defaultValues: {
       employerName: "",
@@ -595,21 +604,40 @@ export default function WorkHistoryPage() {
   };
 
   // Handle add work history
-  const handleAddWorkHistory = (values: InsertPhysicianWorkHistory) => {
+  const handleAddWorkHistory = (values: z.infer<typeof workHistoryFormSchema>) => {
     if (selectedPhysician) {
+      const workHistoryData: InsertPhysicianWorkHistory = {
+        physicianId: selectedPhysician.id,
+        employerName: values.employerName,
+        position: values.position || null,
+        startDate: values.startDate,
+        endDate: values.endDate || null,
+        address: values.address || null,
+        supervisorName: values.supervisorName || null,
+        reasonForLeaving: values.reasonForLeaving || null,
+      };
       addWorkHistoryMutation.mutate({
         physicianId: selectedPhysician.id,
-        workHistory: values,
+        workHistory: workHistoryData,
       });
     }
   };
 
   // Handle edit work history
-  const handleEditWorkHistory = (values: InsertPhysicianWorkHistory) => {
+  const handleEditWorkHistory = (values: z.infer<typeof workHistoryFormSchema>) => {
     if (editingWorkHistory) {
+      const workHistoryData: Partial<InsertPhysicianWorkHistory> = {
+        employerName: values.employerName,
+        position: values.position || null,
+        startDate: values.startDate,
+        endDate: values.endDate || null,
+        address: values.address || null,
+        supervisorName: values.supervisorName || null,
+        reasonForLeaving: values.reasonForLeaving || null,
+      };
       updateWorkHistoryMutation.mutate({
         id: editingWorkHistory.id,
-        workHistory: values,
+        workHistory: workHistoryData,
       });
     }
   };
