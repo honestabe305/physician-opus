@@ -9,11 +9,7 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 8080
-externalPort = 80
-
-[[ports]]
-localPort = 42499
+localPort = 41145
 externalPort = 3000
 
 [deployment]
@@ -43,15 +39,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Production Server"
+args = "Development Server"
 
 [[workflows.workflow]]
-name = "Production Server"
+name = "Development Server"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run start:prod"
+args = "npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
