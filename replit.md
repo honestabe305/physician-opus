@@ -38,7 +38,7 @@ The backend is built with Node.js and Express.js featuring:
 
 ### Database Architecture
 The system uses **PostgreSQL** with **Drizzle ORM** for type-safe database operations:
-- **Neon Database** as the serverless PostgreSQL provider
+- **Neon Database** as the serverless PostgreSQL provider (fixed to use PostgreSQL instead of fallback memory storage)
 - **Drizzle Kit** for schema migrations and database management
 - **Comprehensive schema** covering all physician credentialing aspects:
   - Profiles and user management
