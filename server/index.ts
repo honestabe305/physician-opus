@@ -4,14 +4,14 @@ import path from 'path';
 import { router } from './routes';
 
 const app = express();
-// Use PORT env var (defaults to 5000)
-const PORT = parseInt(process.env.PORT || '5000', 10);
+// Use PORT env var (defaults to 8080)
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 // Middleware setup
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? true  // Allow all origins in production for Replit deployment
-    : ['http://localhost:5000'],
+    : ['http://localhost:5000', 'http://localhost:5173', 'http://localhost:8080'],
   credentials: true
 }));
 
