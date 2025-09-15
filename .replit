@@ -38,10 +38,6 @@ integrations = ["javascript_database:1.0.0"]
 expertMode = true
 
 [[ports]]
-localPort = 80
-externalPort = 80
-
-[[ports]]
 localPort = 3001
 externalPort = 3000
 
@@ -57,9 +53,5 @@ externalPort = 3003
 localPort = 5000
 externalPort = 5000
 
-[[ports]]
-localPort = 5001
 
-[[ports]]
-localPort = 8080
-externalPort = 8080
+
