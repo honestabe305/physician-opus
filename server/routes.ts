@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PostgreSQLStorage } from './storage';
+import { createStorage } from './storage';
 import {
   insertProfileSchema,
   insertPhysicianSchema,
@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
 
 const router = Router();
-const storage = new PostgreSQLStorage();
+const storage = createStorage();
 
 // Helper function for error handling
 const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {

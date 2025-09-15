@@ -1,5 +1,4 @@
 import { eq, like, ilike, and, or, sql } from 'drizzle-orm';
-import { db } from './db';
 import {
   profiles,
   physicians,
@@ -32,6 +31,24 @@ import {
   type SelectUserSettings,
   type InsertUserSettings,
 } from '../shared/schema';
+import { MemoryStorage } from './memoryStorage';
+
+// Storage factory - chooses between PostgreSQL and in-memory based on environment
+export function createStorage(): IStorage {
+  // Check if we have database URL and can actually connect
+  if (process.env.DATABASE_URL) {
+    try {
+      console.log('🗄️ Attempting to use PostgreSQL storage...');
+      return new PostgreSQLStorage();
+    } catch (error) {
+      console.warn('⚠️ PostgreSQL connection failed, falling back to in-memory storage:', error);
+      return new MemoryStorage();
+    }
+  } else {
+    console.log('💾 Using in-memory storage (no DATABASE_URL found)');
+    return new MemoryStorage();
+  }
+}
 
 // Storage interface definition
 export interface IStorage {
@@ -125,12 +142,23 @@ export interface IStorage {
   }>;
 }
 
+// Lazy database connection (only when needed)
+let db: any = null;
+async function getDb() {
+  if (!db) {
+    const { db: dbInstance } = await import('./db');
+    db = dbInstance;
+  }
+  return db;
+}
+
 // PostgreSQL Storage Implementation
 export class PostgreSQLStorage implements IStorage {
   // Profile operations
   async createProfile(profile: InsertProfile): Promise<SelectProfile> {
     try {
-      const [result] = await db.insert(profiles).values(profile).returning();
+      const database = await getDb();
+      const [result] = await database.insert(profiles).values(profile).returning();
       if (!result) {
         throw new Error('Failed to create profile');
       }
@@ -143,7 +171,8 @@ export class PostgreSQLStorage implements IStorage {
 
   async getProfile(userId: string): Promise<SelectProfile | null> {
     try {
-      const [result] = await db.select().from(profiles).where(eq(profiles.userId, userId));
+      const database = await getDb();
+      const [result] = await database.select().from(profiles).where(eq(profiles.userId, userId));
       return result || null;
     } catch (error) {
       console.error('Error getting profile:', error);
