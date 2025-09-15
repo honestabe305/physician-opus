@@ -275,6 +275,7 @@ export default function PhysicianProfilePage() {
         </div>
         <Button 
           className="gap-2 bg-gradient-to-r from-primary to-accent"
+          onClick={() => setLocation(`/physicians/${id}/edit`)}
           data-testid="button-edit-physician"
         >
           <Edit className="h-4 w-4" />
