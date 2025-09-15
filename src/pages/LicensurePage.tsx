@@ -46,8 +46,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import {
   Shield,
@@ -88,6 +101,29 @@ interface CertificationWithPhysician extends SelectPhysicianCertification {
   physician?: SelectPhysician;
 }
 
+// Form schema for adding license
+const licenseFormSchema = z.object({
+  physicianId: z.string().min(1, "Physician is required"),
+  state: z.string().min(1, "State is required"),
+  licenseNumber: z.string().min(1, "License number is required"),
+  expirationDate: z.string().min(1, "Expiration date is required"),
+  licenseType: z.string().optional(),
+});
+
+type LicenseFormData = z.infer<typeof licenseFormSchema>;
+
+// Form schema for adding certification
+const certificationFormSchema = z.object({
+  physicianId: z.string().min(1, "Physician is required"),
+  specialty: z.string().min(1, "Specialty is required"),
+  subspecialty: z.string().optional(),
+  boardName: z.string().min(1, "Board name is required"),
+  certificationDate: z.string().optional(),
+  expirationDate: z.string().optional(),
+});
+
+type CertificationFormData = z.infer<typeof certificationFormSchema>;
+
 export default function LicensurePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -98,6 +134,9 @@ export default function LicensurePage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("licenses");
   const [showTimeline, setShowTimeline] = useState(false);
+  const [isAddLicenseDialogOpen, setIsAddLicenseDialogOpen] = useState(false);
+  const [isAddCertDialogOpen, setIsAddCertDialogOpen] = useState(false);
+  const [selectedPhysicianId, setSelectedPhysicianId] = useState<string>("");
   const { toast } = useToast();
 
   // Debounce search term
@@ -191,6 +230,93 @@ export default function LicensurePage() {
   const physicians = physiciansData?.physicians || [];
   const licenses = licensesData?.licenses || [];
   const certifications = certificationsData?.certifications || [];
+
+  // Form setup for adding license
+  const licenseForm = useForm<LicenseFormData>({
+    resolver: zodResolver(licenseFormSchema),
+    defaultValues: {
+      physicianId: selectedPhysicianId,
+      state: "",
+      licenseNumber: "",
+      expirationDate: "",
+      licenseType: "medical",
+    },
+  });
+
+  // Form setup for adding certification
+  const certForm = useForm<CertificationFormData>({
+    resolver: zodResolver(certificationFormSchema),
+    defaultValues: {
+      physicianId: selectedPhysicianId,
+      specialty: "",
+      subspecialty: "",
+      boardName: "",
+      certificationDate: "",
+      expirationDate: "",
+    },
+  });
+
+  // Mutation for adding license
+  const addLicenseMutation = useMutation({
+    mutationFn: async (data: LicenseFormData) => {
+      const response = await apiRequest(`/physicians/${data.physicianId}/licenses`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "License added successfully",
+      });
+      setIsAddLicenseDialogOpen(false);
+      licenseForm.reset();
+      refetchLicenses();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to add license",
+      });
+    },
+  });
+
+  // Mutation for adding certification
+  const addCertificationMutation = useMutation({
+    mutationFn: async (data: CertificationFormData) => {
+      const response = await apiRequest(`/physicians/${data.physicianId}/certifications`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Certification added successfully",
+      });
+      setIsAddCertDialogOpen(false);
+      certForm.reset();
+      refetchCertifications();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to add certification",
+      });
+    },
+  });
+
+  const handleLicenseSubmit = (data: LicenseFormData) => {
+    addLicenseMutation.mutate(data);
+  };
+
+  const handleCertificationSubmit = (data: CertificationFormData) => {
+    addCertificationMutation.mutate(data);
+  };
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -497,11 +623,32 @@ export default function LicensurePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Licensure & Credentials</h1>
-          <p className="text-muted-foreground">Manage physician licenses, certifications, and credential tracking</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Shield className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Licensure & Credentials</h1>
+            <p className="text-muted-foreground">Manage physician licenses, certifications, and credential tracking</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIsAddLicenseDialogOpen(true)}
+            className="gap-2"
+            data-testid="button-add-license"
+          >
+            <Plus className="h-4 w-4" />
+            Add License
+          </Button>
+          <Button
+            onClick={() => setIsAddCertDialogOpen(true)}
+            className="gap-2"
+            variant="outline"
+            data-testid="button-add-certification"
+          >
+            <Plus className="h-4 w-4" />
+            Add Certification
+          </Button>
         </div>
       </div>
 
@@ -1237,6 +1384,243 @@ export default function LicensurePage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Add License Dialog */}
+      <Dialog open={isAddLicenseDialogOpen} onOpenChange={setIsAddLicenseDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add License</DialogTitle>
+            <DialogDescription>
+              Add a new medical license for a physician
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...licenseForm}>
+            <form onSubmit={licenseForm.handleSubmit(handleLicenseSubmit)} className="space-y-4">
+              <FormField
+                control={licenseForm.control}
+                name="physicianId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Physician *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a physician" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {physicians.map((physician) => (
+                          <SelectItem key={physician.id} value={physician.id}>
+                            {physician.fullLegalName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={licenseForm.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., CA, NY, TX" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      State where the license is issued
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={licenseForm.control}
+                name="licenseNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>License Number *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter license number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={licenseForm.control}
+                name="expirationDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expiration Date *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={licenseForm.control}
+                name="licenseType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>License Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select license type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="medical">Medical</SelectItem>
+                        <SelectItem value="dea">DEA</SelectItem>
+                        <SelectItem value="controlled_substance">Controlled Substance</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddLicenseDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addLicenseMutation.isPending}>
+                  {addLicenseMutation.isPending ? "Adding..." : "Add License"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Certification Dialog */}
+      <Dialog open={isAddCertDialogOpen} onOpenChange={setIsAddCertDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add Certification</DialogTitle>
+            <DialogDescription>
+              Add board certification for a physician
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...certForm}>
+            <form onSubmit={certForm.handleSubmit(handleCertificationSubmit)} className="space-y-4">
+              <FormField
+                control={certForm.control}
+                name="physicianId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Physician *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a physician" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {physicians.map((physician) => (
+                          <SelectItem key={physician.id} value={physician.id}>
+                            {physician.fullLegalName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={certForm.control}
+                name="specialty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Specialty *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Internal Medicine, Surgery" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={certForm.control}
+                name="subspecialty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subspecialty</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Cardiology, Neurosurgery" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={certForm.control}
+                name="boardName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Board Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., American Board of Internal Medicine" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={certForm.control}
+                name="certificationDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Certification Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={certForm.control}
+                name="expirationDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expiration Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddCertDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addCertificationMutation.isPending}>
+                  {addCertificationMutation.isPending ? "Adding..." : "Add Certification"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

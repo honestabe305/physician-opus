@@ -46,8 +46,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import {
   GraduationCap,
@@ -94,6 +107,22 @@ interface PhysicianWithEducation extends SelectPhysician {
   certifications?: SelectPhysicianCertification[];
 }
 
+// Form schema for adding education
+const educationFormSchema = z.object({
+  physicianId: z.string().min(1, "Physician is required"),
+  educationType: z.enum(["medical_school", "residency", "fellowship"], {
+    required_error: "Education type is required",
+  }),
+  institutionName: z.string().min(1, "Institution name is required"),
+  specialty: z.string().optional(),
+  location: z.string().optional(),
+  startDate: z.string().optional(),
+  completionDate: z.string().optional(),
+  graduationYear: z.number().optional(),
+});
+
+type EducationFormData = z.infer<typeof educationFormSchema>;
+
 export default function EducationPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -105,6 +134,8 @@ export default function EducationPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("overview");
   const [showTimeline, setShowTimeline] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedPhysicianId, setSelectedPhysicianId] = useState<string>("");
   const { toast } = useToast();
 
   // Debounce search term
@@ -172,6 +203,52 @@ export default function EducationPage() {
   const physicians = physiciansData?.physicians || [];
   const educations = educationData?.educations || [];
   const certifications = certificationsData?.certifications || [];
+
+  // Form setup for adding education
+  const form = useForm<EducationFormData>({
+    resolver: zodResolver(educationFormSchema),
+    defaultValues: {
+      physicianId: selectedPhysicianId,
+      educationType: undefined,
+      institutionName: "",
+      specialty: "",
+      location: "",
+      startDate: "",
+      completionDate: "",
+      graduationYear: undefined,
+    },
+  });
+
+  // Mutation for adding education
+  const addEducationMutation = useMutation({
+    mutationFn: async (data: EducationFormData) => {
+      const response = await apiRequest(`/physicians/${data.physicianId}/education`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Education record added successfully",
+      });
+      setIsAddDialogOpen(false);
+      form.reset();
+      refetchEducation();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to add education record",
+      });
+    },
+  });
+
+  const handleSubmit = (data: EducationFormData) => {
+    addEducationMutation.mutate(data);
+  };
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -546,12 +623,22 @@ export default function EducationPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <GraduationCap className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Education & Training</h1>
-          <p className="text-muted-foreground">Manage physician education history and academic credentials</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <GraduationCap className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Education & Training</h1>
+            <p className="text-muted-foreground">Manage physician education history and academic credentials</p>
+          </div>
         </div>
+        <Button
+          onClick={() => setIsAddDialogOpen(true)}
+          className="gap-2"
+          data-testid="button-add-education"
+        >
+          <Plus className="h-4 w-4" />
+          Add Education
+        </Button>
       </div>
 
       {/* Statistics Cards */}
@@ -1085,6 +1172,172 @@ export default function EducationPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Education Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add Education Record</DialogTitle>
+            <DialogDescription>
+              Add education and training information for a physician
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="physicianId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Physician *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a physician" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {physicians.map((physician) => (
+                          <SelectItem key={physician.id} value={physician.id}>
+                            {physician.fullLegalName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="educationType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Education Type *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select education type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="medical_school">Medical School</SelectItem>
+                        <SelectItem value="residency">Residency</SelectItem>
+                        <SelectItem value="fellowship">Fellowship</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Type of medical education or training
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="institutionName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Institution Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter institution name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="specialty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Specialty</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter specialty (if applicable)" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <Input placeholder="City, State or Country" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="completionDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Completion Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="graduationYear"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Graduation Year</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 2020" 
+                        {...field} 
+                        onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addEducationMutation.isPending}>
+                  {addEducationMutation.isPending ? "Adding..." : "Add Education"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
