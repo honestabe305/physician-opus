@@ -35,6 +35,12 @@ import { MemoryStorage } from './memoryStorage';
 
 // Storage factory - chooses between PostgreSQL and in-memory based on environment
 export function createStorage(): IStorage {
+  // For production deployment without database, always use in-memory storage
+  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+    console.log('💾 Production: Using in-memory storage');
+    return new MemoryStorage();
+  }
+  
   // Check if we have database URL and can actually connect
   if (process.env.DATABASE_URL) {
     try {
@@ -142,22 +148,22 @@ export interface IStorage {
   }>;
 }
 
-// Lazy database connection (only when needed)
-let db: any = null;
-async function getDb() {
-  if (!db) {
-    const { db: dbInstance } = await import('./db');
-    db = dbInstance;
-  }
-  return db;
-}
-
-// PostgreSQL Storage Implementation
+// PostgreSQL Storage Implementation - with proper lazy loading
 export class PostgreSQLStorage implements IStorage {
+  private db: any = null;
+  
+  private async getDb() {
+    if (!this.db) {
+      const { db: dbInstance } = await import('./db');
+      this.db = dbInstance;
+    }
+    return this.db;
+  }
+
   // Profile operations
   async createProfile(profile: InsertProfile): Promise<SelectProfile> {
     try {
-      const database = await getDb();
+      const database = await this.getDb();
       const [result] = await database.insert(profiles).values(profile).returning();
       if (!result) {
         throw new Error('Failed to create profile');
@@ -171,7 +177,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getProfile(userId: string): Promise<SelectProfile | null> {
     try {
-      const database = await getDb();
+      const database = await this.getDb();
       const [result] = await database.select().from(profiles).where(eq(profiles.userId, userId));
       return result || null;
     } catch (error) {
@@ -182,7 +188,8 @@ export class PostgreSQLStorage implements IStorage {
 
   async getProfileById(id: string): Promise<SelectProfile | null> {
     try {
-      const [result] = await db.select().from(profiles).where(eq(profiles.id, id));
+      const database = await this.getDb();
+      const [result] = await database.select().from(profiles).where(eq(profiles.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting profile by id:', error);
@@ -210,7 +217,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deleteProfile(id: string): Promise<void> {
     try {
-      await db.delete(profiles).where(eq(profiles.id, id));
+      await database.delete(profiles).where(eq(profiles.id, id));
     } catch (error) {
       console.error('Error deleting profile:', error);
       throw new Error(`Failed to delete profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -219,7 +226,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getAllProfiles(): Promise<SelectProfile[]> {
     try {
-      return await db.select().from(profiles);
+      return await database.select().from(profiles);
     } catch (error) {
       console.error('Error getting all profiles:', error);
       throw new Error(`Failed to get profiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -229,7 +236,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician operations
   async createPhysician(physician: InsertPhysician): Promise<SelectPhysician> {
     try {
-      const [result] = await db.insert(physicians).values(physician).returning();
+      const [result] = await database.insert(physicians).values(physician).returning();
       if (!result) {
         throw new Error('Failed to create physician');
       }
@@ -242,7 +249,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysician(id: string): Promise<SelectPhysician | null> {
     try {
-      const [result] = await db.select().from(physicians).where(eq(physicians.id, id));
+      const [result] = await database.select().from(physicians).where(eq(physicians.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician:', error);
@@ -252,7 +259,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianByNpi(npi: string): Promise<SelectPhysician | null> {
     try {
-      const [result] = await db.select().from(physicians).where(eq(physicians.npi, npi));
+      const [result] = await database.select().from(physicians).where(eq(physicians.npi, npi));
       return result || null;
     } catch (error) {
       console.error('Error getting physician by NPI:', error);
@@ -280,7 +287,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysician(id: string): Promise<void> {
     try {
-      await db.delete(physicians).where(eq(physicians.id, id));
+      await database.delete(physicians).where(eq(physicians.id, id));
     } catch (error) {
       console.error('Error deleting physician:', error);
       throw new Error(`Failed to delete physician: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -289,7 +296,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getAllPhysicians(): Promise<SelectPhysician[]> {
     try {
-      return await db.select().from(physicians);
+      return await database.select().from(physicians);
     } catch (error) {
       console.error('Error getting all physicians:', error);
       throw new Error(`Failed to get physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -317,7 +324,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysiciansByStatus(status: string): Promise<SelectPhysician[]> {
     try {
-      return await db.select().from(physicians).where(eq(physicians.status, status));
+      return await database.select().from(physicians).where(eq(physicians.status, status));
     } catch (error) {
       console.error('Error getting physicians by status:', error);
       throw new Error(`Failed to get physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -327,7 +334,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician License operations
   async createPhysicianLicense(license: InsertPhysicianLicense): Promise<SelectPhysicianLicense> {
     try {
-      const [result] = await db.insert(physicianLicenses).values(license).returning();
+      const [result] = await database.insert(physicianLicenses).values(license).returning();
       if (!result) {
         throw new Error('Failed to create physician license');
       }
@@ -340,7 +347,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianLicense(id: string): Promise<SelectPhysicianLicense | null> {
     try {
-      const [result] = await db.select().from(physicianLicenses).where(eq(physicianLicenses.id, id));
+      const [result] = await database.select().from(physicianLicenses).where(eq(physicianLicenses.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician license:', error);
@@ -350,7 +357,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianLicenses(physicianId: string): Promise<SelectPhysicianLicense[]> {
     try {
-      return await db.select().from(physicianLicenses).where(eq(physicianLicenses.physicianId, physicianId));
+      return await database.select().from(physicianLicenses).where(eq(physicianLicenses.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician licenses:', error);
       throw new Error(`Failed to get physician licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -377,7 +384,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianLicense(id: string): Promise<void> {
     try {
-      await db.delete(physicianLicenses).where(eq(physicianLicenses.id, id));
+      await database.delete(physicianLicenses).where(eq(physicianLicenses.id, id));
     } catch (error) {
       console.error('Error deleting physician license:', error);
       throw new Error(`Failed to delete physician license: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -407,7 +414,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Certification operations
   async createPhysicianCertification(certification: InsertPhysicianCertification): Promise<SelectPhysicianCertification> {
     try {
-      const [result] = await db.insert(physicianCertifications).values(certification).returning();
+      const [result] = await database.insert(physicianCertifications).values(certification).returning();
       if (!result) {
         throw new Error('Failed to create physician certification');
       }
@@ -420,7 +427,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianCertification(id: string): Promise<SelectPhysicianCertification | null> {
     try {
-      const [result] = await db.select().from(physicianCertifications).where(eq(physicianCertifications.id, id));
+      const [result] = await database.select().from(physicianCertifications).where(eq(physicianCertifications.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician certification:', error);
@@ -430,7 +437,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianCertifications(physicianId: string): Promise<SelectPhysicianCertification[]> {
     try {
-      return await db.select().from(physicianCertifications).where(eq(physicianCertifications.physicianId, physicianId));
+      return await database.select().from(physicianCertifications).where(eq(physicianCertifications.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician certifications:', error);
       throw new Error(`Failed to get physician certifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -457,7 +464,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianCertification(id: string): Promise<void> {
     try {
-      await db.delete(physicianCertifications).where(eq(physicianCertifications.id, id));
+      await database.delete(physicianCertifications).where(eq(physicianCertifications.id, id));
     } catch (error) {
       console.error('Error deleting physician certification:', error);
       throw new Error(`Failed to delete physician certification: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -487,7 +494,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Education operations
   async createPhysicianEducation(education: InsertPhysicianEducation): Promise<SelectPhysicianEducation> {
     try {
-      const [result] = await db.insert(physicianEducation).values(education).returning();
+      const [result] = await database.insert(physicianEducation).values(education).returning();
       if (!result) {
         throw new Error('Failed to create physician education');
       }
@@ -500,7 +507,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianEducation(id: string): Promise<SelectPhysicianEducation | null> {
     try {
-      const [result] = await db.select().from(physicianEducation).where(eq(physicianEducation.id, id));
+      const [result] = await database.select().from(physicianEducation).where(eq(physicianEducation.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician education:', error);
@@ -510,7 +517,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianEducations(physicianId: string): Promise<SelectPhysicianEducation[]> {
     try {
-      return await db.select().from(physicianEducation).where(eq(physicianEducation.physicianId, physicianId));
+      return await database.select().from(physicianEducation).where(eq(physicianEducation.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician educations:', error);
       throw new Error(`Failed to get physician educations: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -537,7 +544,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianEducation(id: string): Promise<void> {
     try {
-      await db.delete(physicianEducation).where(eq(physicianEducation.id, id));
+      await database.delete(physicianEducation).where(eq(physicianEducation.id, id));
     } catch (error) {
       console.error('Error deleting physician education:', error);
       throw new Error(`Failed to delete physician education: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -547,7 +554,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Work History operations
   async createPhysicianWorkHistory(workHistory: InsertPhysicianWorkHistory): Promise<SelectPhysicianWorkHistory> {
     try {
-      const [result] = await db.insert(physicianWorkHistory).values(workHistory).returning();
+      const [result] = await database.insert(physicianWorkHistory).values(workHistory).returning();
       if (!result) {
         throw new Error('Failed to create physician work history');
       }
@@ -560,7 +567,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianWorkHistory(id: string): Promise<SelectPhysicianWorkHistory | null> {
     try {
-      const [result] = await db.select().from(physicianWorkHistory).where(eq(physicianWorkHistory.id, id));
+      const [result] = await database.select().from(physicianWorkHistory).where(eq(physicianWorkHistory.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician work history:', error);
@@ -570,7 +577,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianWorkHistories(physicianId: string): Promise<SelectPhysicianWorkHistory[]> {
     try {
-      return await db.select().from(physicianWorkHistory).where(eq(physicianWorkHistory.physicianId, physicianId));
+      return await database.select().from(physicianWorkHistory).where(eq(physicianWorkHistory.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician work histories:', error);
       throw new Error(`Failed to get physician work histories: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -597,7 +604,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianWorkHistory(id: string): Promise<void> {
     try {
-      await db.delete(physicianWorkHistory).where(eq(physicianWorkHistory.id, id));
+      await database.delete(physicianWorkHistory).where(eq(physicianWorkHistory.id, id));
     } catch (error) {
       console.error('Error deleting physician work history:', error);
       throw new Error(`Failed to delete physician work history: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -607,7 +614,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Hospital Affiliation operations
   async createPhysicianHospitalAffiliation(affiliation: InsertPhysicianHospitalAffiliation): Promise<SelectPhysicianHospitalAffiliation> {
     try {
-      const [result] = await db.insert(physicianHospitalAffiliations).values(affiliation).returning();
+      const [result] = await database.insert(physicianHospitalAffiliations).values(affiliation).returning();
       if (!result) {
         throw new Error('Failed to create physician hospital affiliation');
       }
@@ -620,7 +627,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianHospitalAffiliation(id: string): Promise<SelectPhysicianHospitalAffiliation | null> {
     try {
-      const [result] = await db.select().from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.id, id));
+      const [result] = await database.select().from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician hospital affiliation:', error);
@@ -630,7 +637,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianHospitalAffiliations(physicianId: string): Promise<SelectPhysicianHospitalAffiliation[]> {
     try {
-      return await db.select().from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.physicianId, physicianId));
+      return await database.select().from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician hospital affiliations:', error);
       throw new Error(`Failed to get physician hospital affiliations: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -657,7 +664,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianHospitalAffiliation(id: string): Promise<void> {
     try {
-      await db.delete(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.id, id));
+      await database.delete(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.id, id));
     } catch (error) {
       console.error('Error deleting physician hospital affiliation:', error);
       throw new Error(`Failed to delete physician hospital affiliation: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -667,7 +674,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Compliance operations
   async createPhysicianCompliance(compliance: InsertPhysicianCompliance): Promise<SelectPhysicianCompliance> {
     try {
-      const [result] = await db.insert(physicianCompliance).values(compliance).returning();
+      const [result] = await database.insert(physicianCompliance).values(compliance).returning();
       if (!result) {
         throw new Error('Failed to create physician compliance');
       }
@@ -680,7 +687,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianCompliance(id: string): Promise<SelectPhysicianCompliance | null> {
     try {
-      const [result] = await db.select().from(physicianCompliance).where(eq(physicianCompliance.id, id));
+      const [result] = await database.select().from(physicianCompliance).where(eq(physicianCompliance.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician compliance:', error);
@@ -690,7 +697,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianComplianceByPhysicianId(physicianId: string): Promise<SelectPhysicianCompliance | null> {
     try {
-      const [result] = await db.select().from(physicianCompliance).where(eq(physicianCompliance.physicianId, physicianId));
+      const [result] = await database.select().from(physicianCompliance).where(eq(physicianCompliance.physicianId, physicianId));
       return result || null;
     } catch (error) {
       console.error('Error getting physician compliance by physician id:', error);
@@ -718,7 +725,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianCompliance(id: string): Promise<void> {
     try {
-      await db.delete(physicianCompliance).where(eq(physicianCompliance.id, id));
+      await database.delete(physicianCompliance).where(eq(physicianCompliance.id, id));
     } catch (error) {
       console.error('Error deleting physician compliance:', error);
       throw new Error(`Failed to delete physician compliance: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -728,7 +735,7 @@ export class PostgreSQLStorage implements IStorage {
   // Physician Document operations
   async createPhysicianDocument(document: InsertPhysicianDocument): Promise<SelectPhysicianDocument> {
     try {
-      const [result] = await db.insert(physicianDocuments).values(document).returning();
+      const [result] = await database.insert(physicianDocuments).values(document).returning();
       if (!result) {
         throw new Error('Failed to create physician document');
       }
@@ -741,7 +748,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianDocument(id: string): Promise<SelectPhysicianDocument | null> {
     try {
-      const [result] = await db.select().from(physicianDocuments).where(eq(physicianDocuments.id, id));
+      const [result] = await database.select().from(physicianDocuments).where(eq(physicianDocuments.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting physician document:', error);
@@ -751,7 +758,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getPhysicianDocuments(physicianId: string): Promise<SelectPhysicianDocument[]> {
     try {
-      return await db.select().from(physicianDocuments).where(eq(physicianDocuments.physicianId, physicianId));
+      return await database.select().from(physicianDocuments).where(eq(physicianDocuments.physicianId, physicianId));
     } catch (error) {
       console.error('Error getting physician documents:', error);
       throw new Error(`Failed to get physician documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -795,7 +802,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deletePhysicianDocument(id: string): Promise<void> {
     try {
-      await db.delete(physicianDocuments).where(eq(physicianDocuments.id, id));
+      await database.delete(physicianDocuments).where(eq(physicianDocuments.id, id));
     } catch (error) {
       console.error('Error deleting physician document:', error);
       throw new Error(`Failed to delete physician document: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -805,7 +812,7 @@ export class PostgreSQLStorage implements IStorage {
   // User Settings operations
   async createUserSettings(settings: InsertUserSettings): Promise<SelectUserSettings> {
     try {
-      const [result] = await db.insert(userSettings).values(settings).returning();
+      const [result] = await database.insert(userSettings).values(settings).returning();
       if (!result) {
         throw new Error('Failed to create user settings');
       }
@@ -818,7 +825,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getUserSettings(userId: string): Promise<SelectUserSettings | null> {
     try {
-      const [result] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+      const [result] = await database.select().from(userSettings).where(eq(userSettings.userId, userId));
       return result || null;
     } catch (error) {
       console.error('Error getting user settings:', error);
@@ -828,7 +835,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async getUserSettingsById(id: string): Promise<SelectUserSettings | null> {
     try {
-      const [result] = await db.select().from(userSettings).where(eq(userSettings.id, id));
+      const [result] = await database.select().from(userSettings).where(eq(userSettings.id, id));
       return result || null;
     } catch (error) {
       console.error('Error getting user settings by id:', error);
@@ -855,7 +862,7 @@ export class PostgreSQLStorage implements IStorage {
 
   async deleteUserSettings(userId: string): Promise<void> {
     try {
-      await db.delete(userSettings).where(eq(userSettings.userId, userId));
+      await database.delete(userSettings).where(eq(userSettings.userId, userId));
     } catch (error) {
       console.error('Error deleting user settings:', error);
       throw new Error(`Failed to delete user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
