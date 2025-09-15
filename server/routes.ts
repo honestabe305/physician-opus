@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createStorage } from './simpleStorage';
+import { createStorage } from './storage';
 import {
   insertProfileSchema,
   insertPhysicianSchema,
