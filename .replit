@@ -52,3 +52,6 @@ outputType = "webview"
 [nix]
 channel = "stable-25_05"
 packages = ["jq"]
+
+[objectStorage]
+defaultBucketID = "replit-objstore-eff1b6bc-faa1-48ef-ba40-694ef25d01d6"
