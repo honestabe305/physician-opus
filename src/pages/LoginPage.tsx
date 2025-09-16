@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,15 +25,13 @@ import {
   Shield,
   Activity
 } from "lucide-react";
-import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 
 // Form validation schema
 const loginFormSchema = z.object({
-  email: z.string()
-    .min(1, "Email is required")
-    .email("Please enter a valid email address"),
+  username: z.string()
+    .min(1, "Username or email is required"),
   password: z.string()
     .min(1, "Password is required"),
   rememberMe: z.boolean().optional().default(false),
@@ -44,58 +40,34 @@ const loginFormSchema = z.object({
 type LoginFormData = z.infer<typeof loginFormSchema>;
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: {
-      email: "",
+      username: "",
       password: "",
       rememberMe: false,
     },
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (data: LoginFormData) => {
-      return apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-          rememberMe: data.rememberMe,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-    },
-    onSuccess: (data) => {
-      // Clear any previous errors
-      setLoginError(null);
-      
-      // Store user data if needed (typically handled by cookies from the server)
-      if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
-
-      toast({
-        title: "Login successful",
-        description: "Welcome back to PhysicianCRM",
-      });
-
-      // Redirect to dashboard or requested page
-      const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
-      setLocation(redirectTo);
-    },
-    onError: (error) => {
+  const onSubmit = async (data: LoginFormData) => {
+    // Clear previous errors on new submission
+    setLoginError(null);
+    setIsLoading(true);
+    
+    try {
+      await login(data.username, data.password, data.rememberMe);
+      // Success - AuthContext handles navigation
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
       
       // Set specific error messages based on the error
       if (errorMessage.includes('Invalid credentials') || errorMessage.includes('401')) {
-        setLoginError("Invalid email or password. Please try again.");
+        setLoginError("Invalid username/email or password. Please try again.");
       } else if (errorMessage.includes('locked') || errorMessage.includes('403')) {
         setLoginError("Your account has been locked due to multiple failed login attempts. Please contact support.");
       } else if (errorMessage.includes('deactivated')) {
@@ -105,13 +77,9 @@ export default function LoginPage() {
       } else {
         setLoginError(errorMessage);
       }
-    },
-  });
-
-  const onSubmit = (data: LoginFormData) => {
-    // Clear previous errors on new submission
-    setLoginError(null);
-    loginMutation.mutate(data);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -157,23 +125,23 @@ export default function LoginPage() {
                   </Alert>
                 )}
 
-                {/* Email Field */}
+                {/* Username/Email Field */}
                 <FormField
                   control={form.control}
-                  name="email"
+                  name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address</FormLabel>
+                      <FormLabel>Username or Email</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
-                            type="email"
-                            placeholder="you@example.com"
+                            type="text"
+                            placeholder="username or email@example.com"
                             className="pl-10"
-                            autoComplete="email"
+                            autoComplete="username"
                             autoFocus
-                            data-testid="input-email"
+                            data-testid="input-username"
                             {...field}
                           />
                         </div>
@@ -248,10 +216,7 @@ export default function LoginPage() {
                     variant="link"
                     className="px-0 text-sm text-primary hover:text-primary/80"
                     onClick={() => {
-                      toast({
-                        title: "Password Reset",
-                        description: "Password reset functionality coming soon. Please contact your administrator.",
-                      });
+                      setLoginError("Password reset functionality coming soon. Please contact your administrator.");
                     }}
                     data-testid="link-forgot-password"
                   >
@@ -263,10 +228,10 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={loginMutation.isPending}
+                  disabled={isLoading}
                   data-testid="button-submit"
                 >
-                  {loginMutation.isPending ? (
+                  {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Signing in...

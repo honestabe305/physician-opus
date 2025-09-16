@@ -1,9 +1,9 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Monitor, User } from "lucide-react";
+import { Moon, Sun, Monitor, User, LogOut } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useUserProfile } from "@/hooks/use-user-profile";
+import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -20,7 +20,29 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const { profile, getInitials, getDisplayName } = useUserProfile();
+  const { user, profile, logout } = useAuth();
+  
+  // Helper functions for user display
+  const getInitials = () => {
+    if (profile?.fullName) {
+      const names = profile.fullName.trim().split(' ');
+      if (names.length >= 2) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+      }
+      return names[0][0].toUpperCase();
+    }
+    if (user?.username) {
+      return user.username.substring(0, 2).toUpperCase();
+    }
+    return 'U';
+  };
+  
+  const getDisplayName = () => {
+    if (profile?.fullName) return profile.fullName;
+    if (user?.username) return user.username;
+    if (user?.email) return user.email;
+    return 'User';
+  };
 
   return (
     <SidebarProvider>
@@ -76,7 +98,7 @@ export default function Layout({ children }: LayoutProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2" data-testid="button-user-menu">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={profile.profilePhoto} />
+                      <AvatarImage src={profile?.profilePhoto} />
                       <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                         {getInitials()}
                       </AvatarFallback>
@@ -85,9 +107,9 @@ export default function Layout({ children }: LayoutProps) {
                       <p className="text-sm font-medium text-foreground" data-testid="header-username">
                         {getDisplayName()}
                       </p>
-                      {profile.role && (
+                      {(profile?.role || user?.role) && (
                         <p className="text-xs text-muted-foreground" data-testid="header-role">
-                          {profile.role}
+                          {profile?.role || user?.role}
                         </p>
                       )}
                     </div>
@@ -96,7 +118,7 @@ export default function Layout({ children }: LayoutProps) {
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5">
                     <p className="text-sm font-medium">{getDisplayName()}</p>
-                    <p className="text-xs text-muted-foreground">{profile.email}</p>
+                    <p className="text-xs text-muted-foreground">{profile?.email || user?.email}</p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
@@ -104,6 +126,15 @@ export default function Layout({ children }: LayoutProps) {
                       <User className="mr-2 h-4 w-4" />
                       <span>Profile Settings</span>
                     </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={logout}
+                    className="flex items-center cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                    data-testid="menu-logout"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Logout</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
