@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
+import { NotificationsDropdown } from "@/components/NotificationsDropdown";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -207,17 +208,10 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Manage your physician credentialing system</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/settings">
-            <Button variant="outline" className="gap-2 relative" data-testid="button-notifications">
-              <Bell className="h-4 w-4" />
-              Notifications
-              {hasEnabledNotifications() && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center" variant="destructive">
-                  {getEnabledCount()}
-                </Badge>
-              )}
-            </Button>
-          </Link>
+          <NotificationsDropdown 
+            hasEnabledNotifications={hasEnabledNotifications}
+            getEnabledCount={getEnabledCount}
+          />
           <Link href="/search">
             <Button variant="outline" className="gap-2" data-testid="button-search">
               <Search className="h-4 w-4" />
