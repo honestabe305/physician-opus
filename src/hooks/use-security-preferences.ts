@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { AuthContext } from '@/contexts/AuthContext';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 export interface ActivityLogEntry {
   id: string;
@@ -73,52 +76,48 @@ const defaultPreferences: SecurityPreferences = {
   trustedDevices: []
 };
 
-// Get mock data for demo purposes
-const getMockActivityLog = (): ActivityLogEntry[] => {
-  const now = new Date();
-  const activities: ActivityLogEntry[] = [];
+// Get device and location info
+const getDeviceInfo = () => {
+  const userAgent = navigator.userAgent;
+  let device = 'Unknown Device';
   
-  // Generate mock activity log entries
-  for (let i = 0; i < 10; i++) {
-    const date = new Date(now);
-    date.setHours(date.getHours() - (i * 3));
-    
-    const types: ActivityLogEntry['type'][] = ['login', 'logout', 'settings_change', 'access_attempt', 'password_change'];
-    const devices = ['Chrome on Windows', 'Safari on Mac', 'Chrome on Android', 'Firefox on Linux', 'Edge on Windows'];
-    const locations = ['New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ'];
-    const ips = ['192.168.1.100', '10.0.0.50', '172.16.0.25', '192.168.0.15', '10.1.1.100'];
-    
-    activities.push({
-      id: `activity-${i}`,
-      timestamp: date.toISOString(),
-      type: types[Math.floor(Math.random() * types.length)],
-      ipAddress: ips[Math.floor(Math.random() * ips.length)],
-      device: devices[Math.floor(Math.random() * devices.length)],
-      location: locations[Math.floor(Math.random() * locations.length)],
-      success: i === 3 ? false : true, // One failed attempt
-      details: i === 3 ? 'Invalid password' : undefined
-    });
-  }
+  if (userAgent.includes('Chrome')) device = 'Chrome';
+  else if (userAgent.includes('Safari')) device = 'Safari';
+  else if (userAgent.includes('Firefox')) device = 'Firefox';
+  else if (userAgent.includes('Edge')) device = 'Edge';
   
-  return activities;
+  if (userAgent.includes('Windows')) device += ' on Windows';
+  else if (userAgent.includes('Mac')) device += ' on Mac';
+  else if (userAgent.includes('Linux')) device += ' on Linux';
+  else if (userAgent.includes('Android')) device += ' on Android';
+  else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) device += ' on iOS';
+  
+  return device;
+};
+
+// Get IP address (would need backend support in production)
+const getIpAddress = () => {
+  // In production, this would come from the backend
+  return 'Current Session';
 };
 
 export function useSecurityPreferences() {
+  // Get auth context - but handle case where it might not be available
+  const authContext = useContext(AuthContext);
+  const { toast } = useToast();
+  const [isLocked, setIsLocked] = useState(false);
+  
   const [preferences, setPreferences] = useState<SecurityPreferences>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Ensure activity log is populated with mock data if empty
-        if (!parsed.activityLog || parsed.activityLog.length === 0) {
-          parsed.activityLog = getMockActivityLog();
-        }
-        return { ...defaultPreferences, ...parsed };
+        return { ...defaultPreferences, ...parsed, activityLog: parsed.activityLog || [] };
       }
     } catch (error) {
       console.error('Failed to load security preferences:', error);
     }
-    return { ...defaultPreferences, activityLog: getMockActivityLog() };
+    return { ...defaultPreferences, activityLog: [] };
   });
 
   const [sessionWarningActive, setSessionWarningActive] = useState(false);
@@ -157,11 +156,11 @@ export function useSecurityPreferences() {
 
   // Reset to default preferences
   const resetPreferences = useCallback(() => {
-    const newPrefs = { ...defaultPreferences, activityLog: getMockActivityLog() };
+    const newPrefs = { ...defaultPreferences, activityLog: preferences.activityLog };
     setPreferences(newPrefs);
     setSessionWarningActive(false);
     setTimeUntilTimeout(null);
-  }, []);
+  }, [preferences.activityLog]);
 
   // Add activity log entry
   const addActivityLogEntry = useCallback((entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
@@ -206,31 +205,44 @@ export function useSecurityPreferences() {
   // Handle session timeout
   const handleSessionTimeout = useCallback(() => {
     if (preferences.autoLock) {
-      // Lock screen logic would go here
-      console.log('Screen locked due to inactivity');
+      // Lock the screen instead of logging out
+      setIsLocked(true);
       addActivityLogEntry({
         type: 'logout',
-        ipAddress: 'Current Session',
-        device: navigator.userAgent,
+        ipAddress: getIpAddress(),
+        device: getDeviceInfo(),
         success: true,
         details: 'Auto-locked due to inactivity'
       });
+      
+      toast({
+        title: "Session Locked",
+        description: "Your session has been locked due to inactivity. Please enter your password to continue.",
+        variant: "default"
+      });
     } else {
-      // Logout logic would go here
-      console.log('Session expired due to inactivity');
+      // Actually log out the user
       addActivityLogEntry({
         type: 'logout',
-        ipAddress: 'Current Session',
-        device: navigator.userAgent,
+        ipAddress: getIpAddress(),
+        device: getDeviceInfo(),
         success: true,
         details: 'Session timeout'
       });
+      
+      // If auth context is available, use it to logout
+      if (authContext?.logout) {
+        authContext.logout();
+      } else {
+        // Fallback to redirect
+        window.location.href = '/login';
+      }
     }
     
     // Clear warning state
     setSessionWarningActive(false);
     setTimeUntilTimeout(null);
-  }, [preferences.autoLock, addActivityLogEntry]);
+  }, [preferences.autoLock, addActivityLogEntry, authContext, toast]);
 
   // Show session warning
   const showSessionWarning = useCallback(() => {
@@ -420,6 +432,47 @@ export function useSecurityPreferences() {
     }));
   }, []);
 
+  // Handle unlock
+  const unlockSession = useCallback(() => {
+    setIsLocked(false);
+    updateLastActivity();
+    addActivityLogEntry({
+      type: 'access_attempt',
+      ipAddress: getIpAddress(),
+      device: getDeviceInfo(),
+      success: true,
+      details: 'Session unlocked successfully'
+    });
+    toast({
+      title: "Session Unlocked",
+      description: "Welcome back! Your session has been restored.",
+      variant: "default"
+    });
+  }, [updateLastActivity, addActivityLogEntry, toast]);
+
+  // Load activity log from backend on mount
+  useEffect(() => {
+    const loadActivityLog = async () => {
+      try {
+        const response = await apiRequest('/auth/activity-log');
+        if (response && response.activities) {
+          setPreferences(prev => ({
+            ...prev,
+            activityLog: response.activities
+          }));
+        }
+      } catch (error) {
+        // API might not be available yet, use local storage only
+        console.debug('Activity log API not available, using local storage');
+      }
+    };
+    
+    // Only load if authenticated
+    if (authContext?.isAuthenticated) {
+      loadActivityLog();
+    }
+  }, [authContext?.isAuthenticated]);
+
   return {
     preferences,
     updatePreference,
@@ -436,6 +489,10 @@ export function useSecurityPreferences() {
     addTrustedDevice,
     removeTrustedDevice,
     addIpToWhitelist,
-    removeIpFromWhitelist
+    removeIpFromWhitelist,
+    isLocked,
+    unlockSession,
+    getDeviceInfo,
+    getIpAddress
   };
 }

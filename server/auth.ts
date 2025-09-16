@@ -9,8 +9,8 @@ import type { SelectUser, SelectSession } from '../shared/schema';
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_EXPIRY_HOURS = 24;
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MINUTES = 15;
+export const MAX_LOGIN_ATTEMPTS = 5;
+export const LOCKOUT_DURATION_MINUTES = 15;
 
 // Extend Express Request type to include user and session
 declare global {

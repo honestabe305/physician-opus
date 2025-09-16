@@ -1,7 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import LockScreen from '@/components/LockScreen';
+import { useSecurityPreferences } from '@/hooks/use-security-preferences';
 
 interface User {
   id: string;
@@ -36,13 +38,17 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   sessionExpiresAt: Date | null;
+  sessionTimeRemaining: number | null;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (profile: Profile) => void;
+  extendSession: () => Promise<void>;
+  lockSession: () => void;
+  unlockSession: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -61,8 +67,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<Date | null>(null);
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Get security preferences
+  const {
+    preferences: securityPreferences,
+    addActivityLogEntry,
+    updateLastActivity,
+    sessionWarningActive,
+    timeUntilTimeout,
+    isLocked,
+    unlockSession: unlockFromSecurity,
+    getDeviceInfo,
+    getIpAddress
+  } = useSecurityPreferences();
 
   // Check authentication status
   const checkAuth = useCallback(async () => {
@@ -121,6 +142,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setProfile(response.profile || null);
         setSessionExpiresAt(response.sessionExpiresAt ? new Date(response.sessionExpiresAt) : null);
         
+        // Log successful login
+        addActivityLogEntry({
+          type: 'login',
+          ipAddress: getIpAddress(),
+          device: getDeviceInfo(),
+          success: true,
+          details: rememberMe ? 'Login with remember me enabled' : 'Standard login'
+        });
+        
+        // Update last activity
+        updateLastActivity();
+        
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
@@ -134,13 +167,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       }
     } catch (error) {
+      // Log failed login attempt
+      addActivityLogEntry({
+        type: 'access_attempt',
+        ipAddress: getIpAddress(),
+        device: getDeviceInfo(),
+        success: false,
+        details: error instanceof Error ? error.message : 'Login failed'
+      });
+      
       // Error handling is done in the LoginPage component
       throw error;
     }
-  }, [setLocation, toast]);
+  }, [setLocation, toast, addActivityLogEntry, updateLastActivity, getDeviceInfo, getIpAddress]);
 
   // Logout function
   const logout = useCallback(async () => {
+    // Log logout event
+    addActivityLogEntry({
+      type: 'logout',
+      ipAddress: getIpAddress(),
+      device: getDeviceInfo(),
+      success: true,
+      details: 'Manual logout'
+    });
+    
     try {
       await apiRequest('/auth/logout', {
         method: 'POST',
@@ -153,6 +204,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setProfile(null);
       setSessionExpiresAt(null);
+      setSessionTimeRemaining(null);
+      
+      // Clear session timer
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+        sessionTimerRef.current = null;
+      }
       
       // Clear all cached data
       queryClient.clear();
@@ -165,12 +223,66 @@ export function AuthProvider({ children }: AuthProviderProps) {
         description: "You have been successfully logged out",
       });
     }
-  }, [setLocation, toast]);
+  }, [setLocation, toast, addActivityLogEntry, getDeviceInfo, getIpAddress]);
 
   // Update profile function
   const updateProfile = useCallback((newProfile: Profile) => {
     setProfile(newProfile);
   }, []);
+  
+  // Extend session function
+  const extendSession = useCallback(async () => {
+    try {
+      const response = await apiRequest('/auth/extend-session', {
+        method: 'POST',
+      });
+      
+      if (response && response.sessionExpiresAt) {
+        setSessionExpiresAt(new Date(response.sessionExpiresAt));
+        updateLastActivity();
+        
+        toast({
+          title: "Session extended",
+          description: "Your session has been extended",
+        });
+        
+        // Log session extension
+        addActivityLogEntry({
+          type: 'settings_change',
+          ipAddress: getIpAddress(),
+          device: getDeviceInfo(),
+          success: true,
+          details: 'Session extended'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to extend session:', error);
+      toast({
+        title: "Failed to extend session",
+        description: "Please log in again",
+        variant: "destructive",
+      });
+    }
+  }, [toast, updateLastActivity, addActivityLogEntry, getDeviceInfo, getIpAddress]);
+  
+  // Lock session function
+  const lockSession = useCallback(() => {
+    // This is handled by the security preferences hook
+    // But we can trigger it manually if needed
+    addActivityLogEntry({
+      type: 'access_attempt',
+      ipAddress: getIpAddress(),
+      device: getDeviceInfo(),
+      success: true,
+      details: 'Session manually locked'
+    });
+  }, [addActivityLogEntry, getDeviceInfo, getIpAddress]);
+  
+  // Unlock session function
+  const unlockSession = useCallback(() => {
+    unlockFromSecurity();
+    updateLastActivity();
+  }, [unlockFromSecurity, updateLastActivity]);
 
   // Check auth on mount and set up axios interceptor
   useEffect(() => {
@@ -220,17 +332,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  // Track session time remaining
+  useEffect(() => {
+    if (sessionExpiresAt && user) {
+      const updateTimeRemaining = () => {
+        const now = new Date().getTime();
+        const expiry = sessionExpiresAt.getTime();
+        const remaining = Math.max(0, Math.floor((expiry - now) / 1000));
+        setSessionTimeRemaining(remaining);
+        
+        if (remaining === 0 && !sessionWarningActive) {
+          // Session expired
+          logout();
+        }
+      };
+      
+      updateTimeRemaining();
+      sessionTimerRef.current = setInterval(updateTimeRemaining, 1000);
+      
+      return () => {
+        if (sessionTimerRef.current) {
+          clearInterval(sessionTimerRef.current);
+        }
+      };
+    } else {
+      setSessionTimeRemaining(null);
+    }
+  }, [sessionExpiresAt, user, logout, sessionWarningActive]);
+
   const value: AuthContextType = {
     user,
     profile,
     isLoading,
     isAuthenticated: !!user,
     sessionExpiresAt,
+    sessionTimeRemaining,
     login,
     logout,
     checkAuth,
     updateProfile,
+    extendSession,
+    lockSession,
+    unlockSession,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {/* Render lock screen when session is locked */}
+      <LockScreen
+        isLocked={isLocked}
+        onUnlock={unlockSession}
+        timeUntilTimeout={timeUntilTimeout}
+        sessionWarningActive={sessionWarningActive}
+      />
+    </AuthContext.Provider>
+  );
 }

@@ -38,7 +38,9 @@ import {
   getIpAddress,
   getUserAgent,
   getCookieOptions,
-  clearAuthCookie
+  clearAuthCookie,
+  MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_DURATION_MINUTES
 } from './auth';
 import rateLimit from 'express-rate-limit';
 
@@ -240,13 +242,102 @@ router.post('/auth/logout', authMiddleware, asyncHandler(async (req: any, res: a
   res.json({ message: 'Logout successful' });
 }));
 
+// POST /api/auth/unlock-session - Unlock a locked session
+router.post('/auth/unlock-session', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { password } = req.body;
+  
+  // Validate input
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required' });
+  }
+  
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not found in session' });
+  }
+  
+  // Verify the password
+  const isValidPassword = await verifyPassword(password, req.user.passwordHash);
+  
+  if (!isValidPassword) {
+    // Increment failed attempts
+    const newAttempts = (req.user.failedLoginAttempts || 0) + 1;
+    await storage.updateLoginAttempts(req.user.id, newAttempts);
+    
+    // Check if account should be locked
+    if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+      const lockUntil = new Date();
+      lockUntil.setMinutes(lockUntil.getMinutes() + LOCKOUT_DURATION_MINUTES);
+      await storage.lockUserAccount(req.user.id, lockUntil);
+      
+      return res.status(403).json({ 
+        error: 'Account locked due to too many failed attempts',
+        lockedUntil: lockUntil.toISOString()
+      });
+    }
+    
+    return res.status(401).json({ 
+      error: 'Invalid password',
+      attemptsRemaining: MAX_LOGIN_ATTEMPTS - newAttempts
+    });
+  }
+  
+  // Reset failed attempts on successful unlock
+  if (req.user.failedLoginAttempts > 0) {
+    await storage.updateLoginAttempts(req.user.id, 0);
+  }
+  
+  // Update session last activity
+  await storage.updateLastLoginAt(req.user.id);
+  
+  res.json({ 
+    success: true,
+    message: 'Session unlocked successfully'
+  });
+}));
+
+// POST /api/auth/extend-session - Extend current session
+router.post('/auth/extend-session', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  if (!req.session || !req.sessionToken) {
+    return res.status(401).json({ error: 'No active session' });
+  }
+  
+  // Extend session by default duration
+  const newExpiry = getSessionExpiry(false); // Not using remember me for extension
+  const updatedSession = await storage.extendSession(req.sessionToken, newExpiry);
+  
+  // Update last activity
+  await storage.updateLastLoginAt(req.user!.id);
+  
+  res.json({ 
+    success: true,
+    sessionExpiresAt: updatedSession.expiresAt,
+    message: 'Session extended successfully'
+  });
+}));
+
+// GET /api/auth/activity-log - Get user's activity log
+router.get('/auth/activity-log', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  // In a real app, this would fetch from database
+  // For now, return empty array as placeholder
+  res.json({ 
+    activities: [],
+    message: 'Activity log endpoint not fully implemented yet'
+  });
+}));
+
 // GET /api/auth/me - Get current user info
 router.get('/auth/me', authMiddleware, asyncHandler(async (req: any, res: any) => {
   // Get user profile
   const profile = await storage.getProfile(req.user!.id);
   
-  // Get user settings
-  const settings = await storage.getUserSettings(req.user!.id);
+  // Get user settings - handle if it doesn't exist
+  let settings = null;
+  try {
+    settings = await storage.getUserSettings(req.user!.id);
+  } catch (error) {
+    // Settings might not exist yet, that's okay
+    console.debug('User settings not found for user:', req.user!.id);
+  }
   
   // Return user info without sensitive data
   const { passwordHash: _, twoFactorSecret: __, ...safeUser } = req.user!;
