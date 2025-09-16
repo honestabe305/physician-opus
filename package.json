@@ -61,6 +61,7 @@
     "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.2.0",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.44.5",
     "drizzle-zod": "^0.8.3",

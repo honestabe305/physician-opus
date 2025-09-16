@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ interface ExpirationReport {
 }
 
 export default function Dashboard() {
+  const { formatDateTime } = useDisplayPreferences();
+  
   // Fetch physician status summary
   const { data: statusSummary, isLoading: isLoadingStatus, error: statusError } = useQuery<PhysicianStatusSummary>({
     queryKey: ['/analytics/physicians/status-summary'],
@@ -166,7 +169,7 @@ export default function Dashboard() {
       id: 1,
       physician: "Recent Activity",
       action: "Activity tracking coming soon",
-      time: "System",
+      time: formatDateTime(new Date()),
       status: "info"
     }
   ];

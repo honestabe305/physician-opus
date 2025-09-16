@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,8 @@ import {
   FileText,
   MoreVertical,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,6 +40,8 @@ import type { SelectPhysician } from "../../shared/schema";
 export default function PhysiciansPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const { preferences, formatDate, getTableRowClass, getTableCellClass } = useDisplayPreferences();
 
   // Debounce search term
   useEffect(() => {
@@ -56,6 +61,18 @@ export default function PhysiciansPage() {
 
   // Fetch document counts for each physician
   const physicians = (physiciansData as any)?.physicians || [];
+  
+  // Pagination logic
+  const itemsPerPage = preferences.itemsPerPage;
+  const totalPages = Math.ceil(physicians.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPhysicians = physicians.slice(startIndex, endIndex);
+  
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
   
   // Helper function to get document count
   const getDocumentCount = (physicianId: string) => {
@@ -190,7 +207,7 @@ export default function PhysiciansPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  physicians.map((physician: SelectPhysician) => (
+                  paginatedPhysicians.map((physician: SelectPhysician) => (
                     <TableRow key={physician.id} className="hover:bg-muted/20" data-testid={`row-physician-${physician.id}`}>
                       <TableCell>
                         <div>
@@ -222,7 +239,7 @@ export default function PhysiciansPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground" data-testid={`text-physician-updated-${physician.id}`}>
-                        {physician.updatedAt ? new Date(physician.updatedAt).toLocaleDateString() : 'N/A'}
+                        {physician.updatedAt ? formatDate(physician.updatedAt) : 'N/A'}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -259,6 +276,64 @@ export default function PhysiciansPage() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* Pagination Controls */}
+          {!isLoading && physicians.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, physicians.length)} of {physicians.length} physicians
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = idx + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = idx + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + idx;
+                    } else {
+                      pageNum = currentPage - 2 + idx;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-10"
+                        data-testid={`button-page-${pageNum}`}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                  data-testid="button-next-page"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

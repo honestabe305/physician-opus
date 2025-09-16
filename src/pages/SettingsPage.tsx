@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,10 @@ import {
   Info,
   CheckCircle,
   AlertCircle,
-  Lock
+  Lock,
+  Calendar as CalendarIcon,
+  Eye,
+  Layout
 } from "lucide-react";
 import type { SelectUserSettings } from "../../shared/schema";
 
@@ -84,6 +88,12 @@ const CURRENT_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 export default function SettingsPage() {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { 
+    preferences: displayPreferences, 
+    updatePreference, 
+    updatePreferences, 
+    resetPreferences: resetDisplayPreferences 
+  } = useDisplayPreferences();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
@@ -425,9 +435,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
           <TabsTrigger value="preferences" data-testid="tab-preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="display" data-testid="tab-display">Display</TabsTrigger>
           <TabsTrigger value="data" data-testid="tab-data">Data</TabsTrigger>
           <TabsTrigger value="security" data-testid="tab-security">Security</TabsTrigger>
           <TabsTrigger value="advanced" data-testid="tab-advanced">Advanced</TabsTrigger>
@@ -791,6 +802,204 @@ export default function SettingsPage() {
                   </div>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Display Preferences Tab */}
+        <TabsContent value="display" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Eye className="h-5 w-5" />
+                <CardTitle>Display Preferences</CardTitle>
+              </div>
+              <CardDescription>
+                Customize how data is displayed throughout the application
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Date & Time Format Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Date & Time Format
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="date-format">Date Format</Label>
+                    <Select 
+                      value={displayPreferences.dateFormat}
+                      onValueChange={(value) => updatePreference('dateFormat', value as any)}
+                    >
+                      <SelectTrigger id="date-format" data-testid="select-date-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MM/DD/YYYY">
+                          MM/DD/YYYY <span className="text-muted-foreground ml-2">({new Date().toLocaleDateString('en-US')})</span>
+                        </SelectItem>
+                        <SelectItem value="DD/MM/YYYY">
+                          DD/MM/YYYY <span className="text-muted-foreground ml-2">({new Date().toLocaleDateString('en-GB')})</span>
+                        </SelectItem>
+                        <SelectItem value="YYYY-MM-DD">
+                          YYYY-MM-DD <span className="text-muted-foreground ml-2">({new Date().toISOString().split('T')[0]})</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Format for displaying dates
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="time-format">Time Format</Label>
+                    <Select 
+                      value={displayPreferences.timeFormat}
+                      onValueChange={(value) => updatePreference('timeFormat', value as any)}
+                    >
+                      <SelectTrigger id="time-format" data-testid="select-time-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="12">
+                          12-hour <span className="text-muted-foreground ml-2">(2:30 PM)</span>
+                        </SelectItem>
+                        <SelectItem value="24">
+                          24-hour <span className="text-muted-foreground ml-2">(14:30)</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Format for displaying time
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="timezone">Time Zone</Label>
+                    <Select 
+                      value={displayPreferences.timeZone}
+                      onValueChange={(value) => updatePreference('timeZone', value as any)}
+                    >
+                      <SelectTrigger id="timezone" data-testid="select-timezone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UTC">UTC (Coordinated Universal Time)</SelectItem>
+                        <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                        <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                        <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                        <SelectItem value="Europe/London">London (GMT/BST)</SelectItem>
+                        <SelectItem value="Europe/Paris">Paris (CET/CEST)</SelectItem>
+                        <SelectItem value="Asia/Tokyo">Tokyo (JST)</SelectItem>
+                        <SelectItem value="Australia/Sydney">Sydney (AEDT/AEST)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Your local time zone for displaying dates and times
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Table Display Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Layout className="h-4 w-4" />
+                  Table Display
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="items-per-page">Items Per Page</Label>
+                    <Select 
+                      value={displayPreferences.itemsPerPage.toString()}
+                      onValueChange={(value) => updatePreference('itemsPerPage', parseInt(value))}
+                    >
+                      <SelectTrigger id="items-per-page" data-testid="select-items-per-page">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10 items</SelectItem>
+                        <SelectItem value="25">25 items</SelectItem>
+                        <SelectItem value="50">50 items</SelectItem>
+                        <SelectItem value="100">100 items</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Default number of items to display in tables
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="table-view-mode">Table View Mode</Label>
+                    <Select 
+                      value={displayPreferences.tableViewMode}
+                      onValueChange={(value) => updatePreference('tableViewMode', value as any)}
+                    >
+                      <SelectTrigger id="table-view-mode" data-testid="select-table-view-mode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="compact">
+                          Compact <span className="text-muted-foreground ml-2">(More rows, less spacing)</span>
+                        </SelectItem>
+                        <SelectItem value="comfortable">
+                          Comfortable <span className="text-muted-foreground ml-2">(Standard spacing)</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Density of table rows and spacing
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview Section */}
+              <Separator />
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Preview</h3>
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="space-y-2 mt-2">
+                      <p>Your current display preferences:</p>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        <li>Date format: <strong>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, displayPreferences.dateFormat.includes('-') ? '-' : '/')}</strong></li>
+                        <li>Time format: <strong>{displayPreferences.timeFormat === '12' ? '2:30 PM' : '14:30'}</strong></li>
+                        <li>Time zone: <strong>{displayPreferences.timeZone}</strong></li>
+                        <li>Items per page: <strong>{displayPreferences.itemsPerPage}</strong></li>
+                        <li>Table view: <strong>{displayPreferences.tableViewMode}</strong></li>
+                      </ul>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              <div className="flex justify-between pt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    resetDisplayPreferences();
+                    toast({
+                      title: "Display preferences reset",
+                      description: "All display preferences have been reset to defaults."
+                    });
+                  }}
+                  data-testid="button-reset-display"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset to Defaults
+                </Button>
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Settings are saved automatically
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
