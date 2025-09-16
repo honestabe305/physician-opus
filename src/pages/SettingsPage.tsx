@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
+import { useNotificationPreferences, COMMON_MEDICAL_STATES } from "@/hooks/use-notification-preferences";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,15 @@ import {
   Lock,
   Calendar as CalendarIcon,
   Eye,
-  Layout
+  Layout,
+  BellRing,
+  Mail,
+  Smartphone,
+  FileWarning,
+  MapPin,
+  CalendarCheck,
+  TestTube,
+  CalendarDays
 } from "lucide-react";
 import type { SelectUserSettings } from "../../shared/schema";
 
@@ -94,6 +103,16 @@ export default function SettingsPage() {
     updatePreferences, 
     resetPreferences: resetDisplayPreferences 
   } = useDisplayPreferences();
+  const {
+    preferences: notificationPreferences,
+    updateCredentialExpiration,
+    updateLicenseRenewal,
+    updateDocumentUpload,
+    updateDigest,
+    resetPreferences: resetNotificationPreferences,
+    getEnabledCount,
+    getEnabledMethods
+  } = useNotificationPreferences();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
@@ -435,9 +454,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
           <TabsTrigger value="preferences" data-testid="tab-preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="notifications" data-testid="tab-notifications">Notifications</TabsTrigger>
           <TabsTrigger value="display" data-testid="tab-display">Display</TabsTrigger>
           <TabsTrigger value="data" data-testid="tab-data">Data</TabsTrigger>
           <TabsTrigger value="security" data-testid="tab-security">Security</TabsTrigger>
@@ -802,6 +822,453 @@ export default function SettingsPage() {
                   </div>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <BellRing className="h-5 w-5" />
+                <CardTitle>Notification Settings</CardTitle>
+              </div>
+              <CardDescription>
+                Configure how and when you receive notifications about important events
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Credential Expiration Alerts */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Credential Expiration Alerts
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Enable Credential Expiration Notifications</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Get notified when physician credentials are approaching expiration
+                      </p>
+                    </div>
+                    <Switch
+                      data-testid="switch-credential-expiration"
+                      checked={notificationPreferences.credentialExpiration.enabled}
+                      onCheckedChange={(checked) => 
+                        updateCredentialExpiration({ enabled: checked })
+                      }
+                    />
+                  </div>
+                  
+                  {notificationPreferences.credentialExpiration.enabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Warning Period</Label>
+                        <Select
+                          value={String(notificationPreferences.credentialExpiration.warningPeriod)}
+                          onValueChange={(value) => 
+                            updateCredentialExpiration({ warningPeriod: Number(value) as 15 | 30 | 60 | 90 })
+                          }
+                        >
+                          <SelectTrigger data-testid="select-warning-period">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="15">15 days before expiration</SelectItem>
+                            <SelectItem value="30">30 days before expiration</SelectItem>
+                            <SelectItem value="60">60 days before expiration</SelectItem>
+                            <SelectItem value="90">90 days before expiration</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                          How far in advance to start sending expiration warnings
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>Notification Methods</Label>
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <input
+                              type="checkbox"
+                              id="method-email"
+                              data-testid="checkbox-method-email"
+                              checked={notificationPreferences.credentialExpiration.methods.email}
+                              onChange={(e) => 
+                                updateCredentialExpiration({ 
+                                  methods: { ...notificationPreferences.credentialExpiration.methods, email: e.target.checked }
+                                })
+                              }
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <Label htmlFor="method-email" className="font-normal cursor-pointer">
+                              Email Notifications
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Monitor className="h-4 w-4 text-muted-foreground" />
+                            <input
+                              type="checkbox"
+                              id="method-inapp"
+                              data-testid="checkbox-method-inapp"
+                              checked={notificationPreferences.credentialExpiration.methods.inApp}
+                              onChange={(e) => 
+                                updateCredentialExpiration({ 
+                                  methods: { ...notificationPreferences.credentialExpiration.methods, inApp: e.target.checked }
+                                })
+                              }
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <Label htmlFor="method-inapp" className="font-normal cursor-pointer">
+                              In-App Notifications
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Smartphone className="h-4 w-4 text-muted-foreground" />
+                            <input
+                              type="checkbox"
+                              id="method-sms"
+                              data-testid="checkbox-method-sms"
+                              checked={notificationPreferences.credentialExpiration.methods.sms}
+                              onChange={(e) => 
+                                updateCredentialExpiration({ 
+                                  methods: { ...notificationPreferences.credentialExpiration.methods, sms: e.target.checked }
+                                })
+                              }
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <Label htmlFor="method-sms" className="font-normal cursor-pointer">
+                              SMS Notifications
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* License Renewal Reminders */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  License Renewal Reminders
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Enable License Renewal Reminders</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Get reminders about upcoming license renewals by state
+                      </p>
+                    </div>
+                    <Switch
+                      data-testid="switch-license-renewal"
+                      checked={notificationPreferences.licenseRenewal.enabled}
+                      onCheckedChange={(checked) => 
+                        updateLicenseRenewal({ enabled: checked })
+                      }
+                    />
+                  </div>
+                  
+                  {notificationPreferences.licenseRenewal.enabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Monitored States</Label>
+                        <div className="max-h-48 overflow-y-auto border rounded-lg p-3">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {COMMON_MEDICAL_STATES.map((state) => (
+                              <div key={state.code} className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={`state-${state.code}`}
+                                  data-testid={`checkbox-state-${state.code}`}
+                                  checked={notificationPreferences.licenseRenewal.monitoredStates.includes(state.code)}
+                                  onChange={(e) => {
+                                    const states = e.target.checked
+                                      ? [...notificationPreferences.licenseRenewal.monitoredStates, state.code]
+                                      : notificationPreferences.licenseRenewal.monitoredStates.filter(s => s !== state.code);
+                                    updateLicenseRenewal({ monitoredStates: states });
+                                  }}
+                                  className="h-4 w-4 rounded border-input"
+                                />
+                                <Label htmlFor={`state-${state.code}`} className="font-normal cursor-pointer text-sm">
+                                  {state.name}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Select states where you want to monitor license renewals
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>Reminder Frequency</Label>
+                        <Select
+                          value={notificationPreferences.licenseRenewal.frequency}
+                          onValueChange={(value) => 
+                            updateLicenseRenewal({ frequency: value as 'weekly' | 'biweekly' | 'monthly' })
+                          }
+                        >
+                          <SelectTrigger data-testid="select-reminder-frequency">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                          How often to send license renewal reminder summaries
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Document Upload Reminders */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <FileWarning className="h-4 w-4" />
+                  Document Upload Reminders
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Enable Document Upload Reminders</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Send reminders when documents are requested but not uploaded
+                      </p>
+                    </div>
+                    <Switch
+                      data-testid="switch-document-upload"
+                      checked={notificationPreferences.documentUpload.enabled}
+                      onCheckedChange={(checked) => 
+                        updateDocumentUpload({ enabled: checked })
+                      }
+                    />
+                  </div>
+                  
+                  {notificationPreferences.documentUpload.enabled && (
+                    <div className="space-y-2">
+                      <Label>Days After Request</Label>
+                      <Select
+                        value={String(notificationPreferences.documentUpload.daysAfterRequest)}
+                        onValueChange={(value) => 
+                          updateDocumentUpload({ daysAfterRequest: Number(value) as 1 | 3 | 7 | 14 })
+                        }
+                      >
+                        <SelectTrigger data-testid="select-days-after-request">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 day after request</SelectItem>
+                          <SelectItem value="3">3 days after request</SelectItem>
+                          <SelectItem value="7">7 days after request</SelectItem>
+                          <SelectItem value="14">14 days after request</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-sm text-muted-foreground">
+                        When to send the first reminder after a document is requested
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Daily/Weekly Digest */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4" />
+                  Daily/Weekly Digest
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Enable Digest Emails</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Receive a summary of all notifications in a single email
+                      </p>
+                    </div>
+                    <Switch
+                      data-testid="switch-digest"
+                      checked={notificationPreferences.digest.enabled}
+                      onCheckedChange={(checked) => 
+                        updateDigest({ enabled: checked })
+                      }
+                    />
+                  </div>
+                  
+                  {notificationPreferences.digest.enabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Frequency</Label>
+                        <div className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="freq-daily"
+                              name="digest-frequency"
+                              value="daily"
+                              data-testid="radio-freq-daily"
+                              checked={notificationPreferences.digest.frequency === 'daily'}
+                              onChange={() => updateDigest({ frequency: 'daily', weekDay: undefined })}
+                              className="h-4 w-4"
+                            />
+                            <Label htmlFor="freq-daily" className="font-normal cursor-pointer">
+                              Daily
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="freq-weekly"
+                              name="digest-frequency"
+                              value="weekly"
+                              data-testid="radio-freq-weekly"
+                              checked={notificationPreferences.digest.frequency === 'weekly'}
+                              onChange={() => updateDigest({ frequency: 'weekly', weekDay: 'monday' })}
+                              className="h-4 w-4"
+                            />
+                            <Label htmlFor="freq-weekly" className="font-normal cursor-pointer">
+                              Weekly
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Send Time</Label>
+                          <Input
+                            type="time"
+                            data-testid="input-send-time"
+                            value={notificationPreferences.digest.sendTime}
+                            onChange={(e) => updateDigest({ sendTime: e.target.value })}
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            What time to send the digest email
+                          </p>
+                        </div>
+                        
+                        {notificationPreferences.digest.frequency === 'weekly' && (
+                          <div className="space-y-2">
+                            <Label>Day of Week</Label>
+                            <Select
+                              value={notificationPreferences.digest.weekDay || 'monday'}
+                              onValueChange={(value) => 
+                                updateDigest({ 
+                                  weekDay: value as 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday' 
+                                })
+                              }
+                            >
+                              <SelectTrigger data-testid="select-week-day">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monday">Monday</SelectItem>
+                                <SelectItem value="tuesday">Tuesday</SelectItem>
+                                <SelectItem value="wednesday">Wednesday</SelectItem>
+                                <SelectItem value="thursday">Thursday</SelectItem>
+                                <SelectItem value="friday">Friday</SelectItem>
+                                <SelectItem value="saturday">Saturday</SelectItem>
+                                <SelectItem value="sunday">Sunday</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                              Which day to send the weekly digest
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Test Notifications */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <TestTube className="h-4 w-4" />
+                  Test Notifications
+                </h3>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Send a test notification to verify your settings are working correctly
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const enabledMethods = getEnabledMethods();
+                      if (enabledMethods.length === 0) {
+                        toast({
+                          title: "No notification methods enabled",
+                          description: "Please enable at least one notification method to test",
+                          variant: "destructive"
+                        });
+                      } else {
+                        toast({
+                          title: "Test notification sent!",
+                          description: `Test notification sent via: ${enabledMethods.join(', ')}. This is a sample of what you'll receive for real notifications.`
+                        });
+                      }
+                    }}
+                    data-testid="button-test-notifications"
+                  >
+                    <Bell className="h-4 w-4 mr-2" />
+                    Send Test Notification
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    resetNotificationPreferences();
+                    toast({
+                      title: "Notification settings reset",
+                      description: "All notification preferences have been reset to defaults."
+                    });
+                  }}
+                  data-testid="button-reset-notifications"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset to Defaults
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {getEnabledCount()} notification types enabled
+                  </Badge>
+                  <Button
+                    onClick={() => {
+                      toast({
+                        title: "Notification settings saved",
+                        description: "Your notification preferences have been saved."
+                      });
+                    }}
+                    data-testid="button-save-notifications"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Settings
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
+import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 import {
   Users,
   UserCheck,
@@ -17,6 +19,9 @@ import {
   Search,
   Shield,
   Calendar,
+  Bell,
+  CheckCircle2,
+  Settings,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -35,6 +40,7 @@ interface ExpirationReport {
 
 export default function Dashboard() {
   const { formatDateTime } = useDisplayPreferences();
+  const { preferences: notificationPrefs, getEnabledCount, getEnabledMethods, hasEnabledNotifications } = useNotificationPreferences();
   
   // Fetch physician status summary
   const { data: statusSummary, isLoading: isLoadingStatus, error: statusError } = useQuery<PhysicianStatusSummary>({
@@ -201,6 +207,17 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Manage your physician credentialing system</p>
         </div>
         <div className="flex gap-3">
+          <Link href="/settings">
+            <Button variant="outline" className="gap-2 relative" data-testid="button-notifications">
+              <Bell className="h-4 w-4" />
+              Notifications
+              {hasEnabledNotifications() && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center" variant="destructive">
+                  {getEnabledCount()}
+                </Badge>
+              )}
+            </Button>
+          </Link>
           <Link href="/search">
             <Button variant="outline" className="gap-2" data-testid="button-search">
               <Search className="h-4 w-4" />
@@ -242,6 +259,94 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Notification Status Card */}
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold">Notification Status</CardTitle>
+              <Bell className={`h-5 w-5 ${hasEnabledNotifications() ? 'text-primary' : 'text-muted-foreground'}`} />
+            </div>
+            <CardDescription>
+              {hasEnabledNotifications() 
+                ? `${getEnabledCount()} notification types active`
+                : 'No notifications enabled'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Credential Expiration</span>
+                {notificationPrefs.credentialExpiration.enabled ? (
+                  <Badge variant="default" className="text-xs">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    {notificationPrefs.credentialExpiration.warningPeriod} days
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">Off</Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">License Renewal</span>
+                {notificationPrefs.licenseRenewal.enabled ? (
+                  <Badge variant="default" className="text-xs">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    {notificationPrefs.licenseRenewal.frequency}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">Off</Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Document Upload</span>
+                {notificationPrefs.documentUpload.enabled ? (
+                  <Badge variant="default" className="text-xs">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    {notificationPrefs.documentUpload.daysAfterRequest}d
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">Off</Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Digest Email</span>
+                {notificationPrefs.digest.enabled ? (
+                  <Badge variant="default" className="text-xs">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    {notificationPrefs.digest.frequency}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">Off</Badge>
+                )}
+              </div>
+            </div>
+            
+            {hasEnabledNotifications() && (
+              <>
+                <Separator className="my-3" />
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Active Methods:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {getEnabledMethods().map(method => (
+                      <Badge key={method} variant="outline" className="text-xs">
+                        {method}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            <div className="pt-2">
+              <Link href="/settings">
+                <Button variant="outline" className="w-full text-xs" size="sm" data-testid="button-configure-notifications">
+                  <Settings className="h-3 w-3 mr-1" />
+                  Configure Notifications
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+        
         {/* Recent Activity */}
         <Card className="lg:col-span-2 border-border/50 shadow-sm">
           <CardHeader>
