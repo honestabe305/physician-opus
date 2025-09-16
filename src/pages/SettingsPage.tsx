@@ -200,7 +200,7 @@ export default function SettingsPage() {
   });
 
   // Fetch user profile (make optional)
-  const { data: userProfile, isLoading: profileLoading } = useQuery({
+  const { data: fetchedUserProfile, isLoading: profileLoading } = useQuery({
     queryKey: [`/profiles/user/${CURRENT_USER_ID}`],
     queryFn: () => apiRequest(`/profiles/user/${CURRENT_USER_ID}`),
     retry: false,
@@ -210,7 +210,7 @@ export default function SettingsPage() {
   // Form configurations
   const userProfileForm = useForm<UserProfileFormData>({
     resolver: zodResolver(userProfileSchema),
-    defaultValues: userProfile as UserProfileFormData
+    defaultValues: fetchedUserProfile as UserProfileFormData
   });
 
   const profileForm = useForm<ProfileSettings>({
