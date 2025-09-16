@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Moon, Sun, Monitor, User, LogOut } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -12,7 +13,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Link } from "wouter";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,6 +21,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { user, profile, logout } = useAuth();
+  const [, setLocation] = useLocation();
   
   // Helper functions for user display
   const getInitials = () => {
@@ -121,11 +122,13 @@ export default function Layout({ children }: LayoutProps) {
                     <p className="text-xs text-muted-foreground">{profile?.email || user?.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings" className="flex items-center cursor-pointer" data-testid="menu-profile">
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Profile Settings</span>
-                    </Link>
+                  <DropdownMenuItem 
+                    className="flex items-center cursor-pointer" 
+                    data-testid="menu-profile"
+                    onClick={() => setLocation("/settings")}
+                  >
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
