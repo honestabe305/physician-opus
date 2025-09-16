@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { useNotificationPreferences, COMMON_MEDICAL_STATES } from "@/hooks/use-notification-preferences";
 import { useSecurityPreferences } from "@/hooks/use-security-preferences";
+import { useUserProfile } from "@/hooks/use-user-profile";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,11 +67,43 @@ import {
   LogOut,
   Laptop,
   MapPinned,
-  XCircle
+  XCircle,
+  Camera,
+  Building,
+  Phone,
+  Briefcase,
+  BadgeCheck,
+  Contact
 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import type { SelectUserSettings } from "../../shared/schema";
+import type { UserProfile } from "@/hooks/use-user-profile";
 
 // Form validation schemas
+const userProfileSchema = z.object({
+  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  title: z.string().optional(),
+  department: z.enum(["Administration", "Medical", "HR", "IT", "Compliance", ""]),
+  employeeId: z.string().optional(),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  extension: z.string().optional(),
+  mobile: z.string().optional(),
+  preferredContact: z.enum(["Email", "Phone", "Mobile"]),
+  role: z.enum(["Administrator", "Manager", "Staff", "Viewer", ""]),
+  hireDate: z.string().optional(),
+  officeLocation: z.string().optional(),
+  supervisor: z.string().optional(),
+  licenseNumber: z.string().optional(),
+  bio: z.string().optional(),
+  signature: z.string().optional(),
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional()
+});
+
 const profileSettingsSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
@@ -101,6 +134,7 @@ const securitySettingsSchema = z.object({
   debugMode: z.boolean()
 });
 
+type UserProfileFormData = z.infer<typeof userProfileSchema>;
 type ProfileSettings = z.infer<typeof profileSettingsSchema>;
 type AppPreferences = z.infer<typeof appPreferencesSchema>;
 type DataManagement = z.infer<typeof dataManagementSchema>;
@@ -138,8 +172,16 @@ export default function SettingsPage() {
     generateBackupCodes,
     getPasswordRequirements
   } = useSecurityPreferences();
+  const {
+    profile: userProfile,
+    updateProfile,
+    resetProfile,
+    getInitials,
+    getCompletionPercentage,
+    formatPhone
+  } = useUserProfile();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState("user-profile");
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch user settings (make optional)
@@ -166,6 +208,11 @@ export default function SettingsPage() {
   });
 
   // Form configurations
+  const userProfileForm = useForm<UserProfileFormData>({
+    resolver: zodResolver(userProfileSchema),
+    defaultValues: userProfile as UserProfileFormData
+  });
+
   const profileForm = useForm<ProfileSettings>({
     resolver: zodResolver(profileSettingsSchema),
     defaultValues: {
@@ -256,6 +303,11 @@ export default function SettingsPage() {
     }
   });
 
+  // Initialize user profile form with current data
+  useEffect(() => {
+    userProfileForm.reset(userProfile as UserProfileFormData);
+  }, [userProfile]);
+
   // Initialize forms with data when loaded
   useEffect(() => {
     if (userProfile) {
@@ -299,6 +351,26 @@ export default function SettingsPage() {
   }, [userSettings, theme, preferencesForm, dataForm, securityForm]);
 
   // Save handlers
+  const handleSaveUserProfile = async (data: UserProfileFormData) => {
+    setIsSaving(true);
+    try {
+      // Format phone numbers before saving
+      const formattedData = {
+        ...data,
+        phone: data.phone ? formatPhone(data.phone) : data.phone,
+        mobile: data.mobile ? formatPhone(data.mobile) : data.mobile,
+        emergencyContactPhone: data.emergencyContactPhone ? formatPhone(data.emergencyContactPhone) : data.emergencyContactPhone
+      };
+      updateProfile(formattedData);
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been saved successfully."
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSavePreferences = async (data: AppPreferences) => {
     setIsSaving(true);
     try {
@@ -334,6 +406,15 @@ export default function SettingsPage() {
   };
 
   // Reset handlers
+  const handleResetUserProfile = () => {
+    resetProfile();
+    userProfileForm.reset(userProfile as UserProfileFormData);
+    toast({
+      title: "Profile reset",
+      description: "Your profile has been reset to default values."
+    });
+  };
+
   const handleResetPreferences = () => {
     preferencesForm.reset({
       theme: "system",
@@ -479,8 +560,9 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
-          <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-9">
+          <TabsTrigger value="user-profile" data-testid="tab-user-profile">Profile</TabsTrigger>
+          <TabsTrigger value="profile" data-testid="tab-profile">Account</TabsTrigger>
           <TabsTrigger value="preferences" data-testid="tab-preferences">Preferences</TabsTrigger>
           <TabsTrigger value="notifications" data-testid="tab-notifications">Notifications</TabsTrigger>
           <TabsTrigger value="display" data-testid="tab-display">Display</TabsTrigger>
@@ -490,7 +572,449 @@ export default function SettingsPage() {
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
         </TabsList>
 
-        {/* Profile Settings Tab */}
+        {/* User Profile Tab */}
+        <TabsContent value="user-profile" className="space-y-6">
+          <div className="grid gap-6">
+            {/* Profile Completion Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    <CardTitle>User Profile</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-muted-foreground">
+                      Profile Completion: {getCompletionPercentage()}%
+                    </div>
+                    <Progress value={getCompletionPercentage()} className="w-24" />
+                  </div>
+                </div>
+                <CardDescription>
+                  Manage your personal and professional information
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Form {...userProfileForm}>
+              <form onSubmit={userProfileForm.handleSubmit(handleSaveUserProfile)} className="space-y-6">
+                {/* Personal Information */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Contact className="h-4 w-4" />
+                      Personal Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center gap-6">
+                      <Avatar className="h-24 w-24">
+                        <AvatarImage src={userProfile.profilePhoto} />
+                        <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
+                      </Avatar>
+                      <div className="space-y-2">
+                        <Button type="button" variant="outline" size="sm" disabled>
+                          <Camera className="h-4 w-4 mr-2" />
+                          Upload Photo
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Profile photo upload coming soon</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="fullName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Full Name *</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="John Doe" data-testid="input-fullname" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Title/Position</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Senior Administrator" data-testid="input-title" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="department"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Department</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-department">
+                                  <SelectValue placeholder="Select department" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Administration">Administration</SelectItem>
+                                <SelectItem value="Medical">Medical</SelectItem>
+                                <SelectItem value="HR">Human Resources</SelectItem>
+                                <SelectItem value="IT">Information Technology</SelectItem>
+                                <SelectItem value="Compliance">Compliance</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="employeeId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Employee ID</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="EMP-2024-001" data-testid="input-employeeid" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Contact Information */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      Contact Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Address *</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="email" placeholder="john.doe@example.com" data-testid="input-email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone Number</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="(555) 123-4567" data-testid="input-phone" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="extension"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Extension</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="1234" data-testid="input-extension" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="mobile"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mobile Number</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="(555) 987-6543" data-testid="input-mobile" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={userProfileForm.control}
+                      name="preferredContact"
+                      render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormLabel>Preferred Contact Method</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              className="flex gap-6"
+                            >
+                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <RadioGroupItem value="Email" data-testid="radio-email" />
+                                </FormControl>
+                                <FormLabel className="font-normal">Email</FormLabel>
+                              </FormItem>
+                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <RadioGroupItem value="Phone" data-testid="radio-phone" />
+                                </FormControl>
+                                <FormLabel className="font-normal">Phone</FormLabel>
+                              </FormItem>
+                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <RadioGroupItem value="Mobile" data-testid="radio-mobile" />
+                                </FormControl>
+                                <FormLabel className="font-normal">Mobile</FormLabel>
+                              </FormItem>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Professional Details */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Professional Details
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="role"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Role</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-role">
+                                  <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Administrator">Administrator</SelectItem>
+                                <SelectItem value="Manager">Manager</SelectItem>
+                                <SelectItem value="Staff">Staff</SelectItem>
+                                <SelectItem value="Viewer">Viewer</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="hireDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Hire Date</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="date" data-testid="input-hiredate" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={userProfileForm.control}
+                        name="officeLocation"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Office Location</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Building A, Room 301" data-testid="input-office" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={userProfileForm.control}
+                        name="supervisor"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Supervisor</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Jane Smith" data-testid="input-supervisor" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={userProfileForm.control}
+                      name="licenseNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>License Number (Medical Staff)</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="MD-123456" data-testid="input-license" />
+                          </FormControl>
+                          <FormDescription>
+                            For medical professionals only
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Additional Settings */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BadgeCheck className="h-4 w-4" />
+                      Additional Settings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={userProfileForm.control}
+                      name="bio"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bio / About</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              {...field} 
+                              placeholder="Tell us about yourself..." 
+                              className="min-h-[100px]"
+                              data-testid="textarea-bio"
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            A brief description about yourself and your role
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={userProfileForm.control}
+                      name="signature"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email Signature</FormLabel>
+                          <FormControl>
+                            <Textarea 
+                              {...field} 
+                              placeholder="Your Name&#10;Title&#10;Department" 
+                              className="min-h-[80px] font-mono text-sm"
+                              data-testid="textarea-signature"
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            This signature will be used in reports and communications
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium">Emergency Contact</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={userProfileForm.control}
+                          name="emergencyContactName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contact Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Emergency contact name" data-testid="input-emergency-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={userProfileForm.control}
+                          name="emergencyContactPhone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contact Phone</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="(555) 111-2222" data-testid="input-emergency-phone" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetUserProfile}
+                    disabled={isSaving}
+                    data-testid="button-reset-profile"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset to Default
+                  </Button>
+                  <Button type="submit" disabled={isSaving} data-testid="button-save-profile">
+                    {isSaving ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Profile
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
+        </TabsContent>
+
+        {/* Account Settings Tab (renamed from Profile) */}
         <TabsContent value="profile" className="space-y-6">
           <Card>
             <CardHeader>

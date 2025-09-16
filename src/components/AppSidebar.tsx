@@ -9,8 +9,13 @@ import {
   Shield,
   Clock,
   Building2,
-  GraduationCap
+  GraduationCap,
+  LogOut
 } from "lucide-react";
+import { useUserProfile } from "@/hooks/use-user-profile";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 import {
   Sidebar,
@@ -59,13 +64,53 @@ export function AppSidebar() {
   const [location] = useLocation();
   const currentPath = location;
   const collapsed = state === "collapsed";
+  const { profile, getInitials, getDisplayName, getRoleColor } = useUserProfile();
 
   const isActive = (path: string) => currentPath === path;
 
   return (
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
-      <SidebarContent className="bg-card border-r border-border">
-        {navigation.map((section) => (
+      <SidebarContent className="bg-card border-r border-border flex flex-col">
+        {/* User Profile Section */}
+        <div className="p-4 border-b border-border">
+          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
+            <Avatar className={collapsed ? "h-10 w-10" : "h-12 w-12"}>
+              <AvatarImage src={profile.profilePhoto} />
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" data-testid="sidebar-username">
+                  {getDisplayName()}
+                </p>
+                <p className="text-xs text-muted-foreground truncate" data-testid="sidebar-email">
+                  {profile.email || "No email set"}
+                </p>
+                {profile.role && (
+                  <Badge 
+                    variant="outline" 
+                    className="mt-1 text-xs"
+                    data-testid="sidebar-role-badge"
+                  >
+                    {profile.role}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+          {!collapsed && profile.department && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              <Building2 className="inline h-3 w-3 mr-1" />
+              {profile.department}
+            </div>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <div className="flex-1 overflow-y-auto">
+          {navigation.map((section) => (
           <SidebarGroup key={section.title}>
             {!collapsed && (
               <SidebarGroupLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 py-2">
@@ -95,6 +140,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+        </div>
       </SidebarContent>
     </Sidebar>
   );
