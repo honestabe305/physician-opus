@@ -17,6 +17,7 @@ const SUSPICIOUS_PATTERNS = [
 
 const VALID_PATHS = [
   "/",
+  "/login",
   "/physicians",
   "/physicians/new",
   "/search",
