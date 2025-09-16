@@ -1,4 +1,4 @@
-modules = ["nodejs-20"]
+modules = ["nodejs-20", "postgresql-16"]
 
 [[ports]]
 localPort = 3001
@@ -35,15 +35,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Production Server"
+args = "Dev Server"
 
 [[workflows.workflow]]
-name = "Production Server"
+name = "Dev Server"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run start"
+args = "npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
