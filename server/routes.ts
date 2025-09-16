@@ -331,7 +331,7 @@ router.get('/auth/me', authMiddleware, asyncHandler(async (req: any, res: any) =
   const profile = await storage.getProfile(req.user!.id);
   
   // Get user settings - handle if it doesn't exist
-  let settings = null;
+  let settings: any = null;
   try {
     settings = await storage.getUserSettings(req.user!.id);
   } catch (error) {
