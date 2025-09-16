@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { router } from './routes';
 
@@ -14,6 +15,9 @@ app.use(cors({
     : ['http://localhost:5000', 'http://localhost:5173', 'http://localhost:3001'],
   credentials: true
 }));
+
+// Cookie parser middleware - must come before routes
+app.use(cookieParser());
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

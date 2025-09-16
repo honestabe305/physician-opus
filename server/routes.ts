@@ -11,6 +11,7 @@ import {
   insertPhysicianComplianceSchema,
   insertPhysicianDocumentSchema,
   insertUserSettingsSchema,
+  insertUserSchema,
   type SelectPhysician,
   type SelectPhysicianLicense,
   type SelectPhysicianCertification,
@@ -19,18 +20,379 @@ import {
   type SelectPhysicianHospitalAffiliation,
   type SelectPhysicianCompliance,
   type SelectPhysicianDocument,
-  type SelectUserSettings
+  type SelectUserSettings,
+  type SelectUser
 } from '../shared/schema';
 import { z } from 'zod';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
+import {
+  hashPassword,
+  verifyPassword,
+  generateSessionToken,
+  generateJWT,
+  getSessionExpiry,
+  isAccountLocked,
+  validatePasswordComplexity,
+  authMiddleware,
+  adminMiddleware,
+  getIpAddress,
+  getUserAgent,
+  getCookieOptions,
+  clearAuthCookie
+} from './auth';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 const storage = createStorage();
+
+// Rate limiter for login endpoint
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 attempts per minute
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter for registration endpoint (more restrictive)
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // 3 registration attempts per 15 minutes
+  message: 'Too many registration attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Helper function for error handling
 const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
+
+// ============================
+// AUTHENTICATION ROUTES (No auth required except where specified)
+// ============================
+
+// POST /api/auth/register - Create new user (admin-only)
+router.post('/auth/register', authMiddleware, adminMiddleware, registerLimiter, asyncHandler(async (req: any, res: any) => {
+  const { email, username, password, role = 'staff' } = req.body;
+  
+  // Validate input
+  if (!email || !username || !password) {
+    return res.status(400).json({ error: 'Email, username, and password are required' });
+  }
+  
+  // Validate password complexity
+  const passwordValidation = validatePasswordComplexity(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ 
+      error: 'Password does not meet complexity requirements',
+      details: passwordValidation.errors 
+    });
+  }
+  
+  // Check if user already exists
+  const existingEmail = await storage.getUserByEmail(email);
+  if (existingEmail) {
+    return res.status(409).json({ error: 'User with this email already exists' });
+  }
+  
+  const existingUsername = await storage.getUserByUsername(username);
+  if (existingUsername) {
+    return res.status(409).json({ error: 'User with this username already exists' });
+  }
+  
+  // Hash password and create user
+  const passwordHash = await hashPassword(password);
+  const user = await storage.createUser({
+    email,
+    username,
+    passwordHash,
+    role,
+    isActive: true,
+    failedLoginAttempts: 0,
+    twoFactorEnabled: false
+  });
+  
+  // Create default profile for the user
+  await storage.createProfile({
+    userId: user.id,
+    email: user.email,
+    fullName: username, // Default to username, can be updated later
+    role: user.role
+  });
+  
+  // Return user without sensitive data
+  const { passwordHash: _, twoFactorSecret: __, ...safeUser } = user;
+  res.status(201).json({ 
+    message: 'User created successfully',
+    user: safeUser 
+  });
+}));
+
+// POST /api/auth/login - Login user
+router.post('/auth/login', loginLimiter, asyncHandler(async (req: any, res: any) => {
+  const { username, password, rememberMe = false } = req.body;
+  
+  // Validate input
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  
+  // Find user by username or email
+  let user = await storage.getUserByUsername(username);
+  if (!user) {
+    user = await storage.getUserByEmail(username);
+  }
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  // Check if account is locked
+  if (isAccountLocked(user)) {
+    const lockoutUntil = user.lockedUntil ? new Date(user.lockedUntil) : null;
+    return res.status(403).json({ 
+      error: 'Account is locked due to too many failed login attempts',
+      lockedUntil: lockoutUntil 
+    });
+  }
+  
+  // Check if account is active
+  if (!user.isActive) {
+    return res.status(403).json({ error: 'Account is deactivated' });
+  }
+  
+  // Verify password
+  const isValidPassword = await verifyPassword(password, user.passwordHash);
+  if (!isValidPassword) {
+    // Increment failed login attempts
+    const newAttempts = user.failedLoginAttempts + 1;
+    await storage.updateLoginAttempts(user.id, newAttempts);
+    
+    // Lock account if too many failed attempts
+    if (newAttempts >= 5) {
+      const lockUntil = new Date();
+      lockUntil.setMinutes(lockUntil.getMinutes() + 15);
+      await storage.lockUserAccount(user.id, lockUntil);
+      return res.status(403).json({ 
+        error: 'Account locked due to too many failed login attempts',
+        lockedUntil: lockUntil 
+      });
+    }
+    
+    return res.status(401).json({ 
+      error: 'Invalid credentials',
+      remainingAttempts: 5 - newAttempts 
+    });
+  }
+  
+  // Reset failed login attempts on successful login
+  if (user.failedLoginAttempts > 0) {
+    await storage.updateLoginAttempts(user.id, 0);
+  }
+  
+  // Update last login time
+  await storage.updateLastLoginAt(user.id);
+  
+  // Delete any expired sessions
+  await storage.deleteExpiredSessions();
+  
+  // Create new session
+  const sessionToken = generateSessionToken();
+  const expiresAt = getSessionExpiry(rememberMe);
+  const session = await storage.createSession({
+    userId: user.id,
+    sessionToken,
+    expiresAt,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req)
+  });
+  
+  // Generate JWT with session token
+  const jwt = generateJWT(user.id, sessionToken);
+  
+  // Set cookie with JWT
+  res.cookie('sessionToken', jwt, getCookieOptions(rememberMe));
+  
+  // Get user profile
+  const profile = await storage.getProfile(user.id);
+  
+  // Return user info without sensitive data
+  const { passwordHash: _, twoFactorSecret: __, ...safeUser } = user;
+  res.json({ 
+    message: 'Login successful',
+    user: safeUser,
+    profile,
+    sessionExpiresAt: expiresAt 
+  });
+}));
+
+// POST /api/auth/logout - Logout user
+router.post('/auth/logout', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  // Delete the session
+  if (req.sessionToken) {
+    await storage.deleteSession(req.sessionToken);
+  }
+  
+  // Clear the cookie
+  clearAuthCookie(res);
+  
+  res.json({ message: 'Logout successful' });
+}));
+
+// GET /api/auth/me - Get current user info
+router.get('/auth/me', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  // Get user profile
+  const profile = await storage.getProfile(req.user!.id);
+  
+  // Get user settings
+  const settings = await storage.getUserSettings(req.user!.id);
+  
+  // Return user info without sensitive data
+  const { passwordHash: _, twoFactorSecret: __, ...safeUser } = req.user!;
+  res.json({ 
+    user: safeUser,
+    profile,
+    settings,
+    sessionExpiresAt: req.session!.expiresAt 
+  });
+}));
+
+// POST /api/auth/change-password - Change password for authenticated user
+router.post('/auth/change-password', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  // Validate input
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required' });
+  }
+  
+  // Validate new password complexity
+  const passwordValidation = validatePasswordComplexity(newPassword);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ 
+      error: 'New password does not meet complexity requirements',
+      details: passwordValidation.errors 
+    });
+  }
+  
+  // Verify current password
+  const isValidPassword = await verifyPassword(currentPassword, req.user!.passwordHash);
+  if (!isValidPassword) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  
+  // Check if new password is different from current
+  const isSamePassword = await verifyPassword(newPassword, req.user!.passwordHash);
+  if (isSamePassword) {
+    return res.status(400).json({ error: 'New password must be different from current password' });
+  }
+  
+  // Hash new password and update
+  const newPasswordHash = await hashPassword(newPassword);
+  await storage.updateUser(req.user!.id, { 
+    passwordHash: newPasswordHash,
+    lastPasswordChangeAt: new Date()
+  });
+  
+  // Invalidate all other sessions for security
+  await storage.deleteUserSessions(req.user!.id);
+  
+  // Create new session for current connection
+  const sessionToken = generateSessionToken();
+  const expiresAt = getSessionExpiry(false);
+  await storage.createSession({
+    userId: req.user!.id,
+    sessionToken,
+    expiresAt,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req)
+  });
+  
+  // Generate new JWT with new session token
+  const jwt = generateJWT(req.user!.id, sessionToken);
+  
+  // Set new cookie
+  res.cookie('sessionToken', jwt, getCookieOptions(false));
+  
+  res.json({ message: 'Password changed successfully' });
+}));
+
+// POST /api/auth/unlock/:userId - Admin endpoint to unlock accounts
+router.post('/auth/unlock/:userId', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { userId } = req.params;
+  
+  // Check if user exists
+  const user = await storage.getUserById(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  // Unlock the account
+  await storage.unlockUserAccount(userId);
+  await storage.updateLoginAttempts(userId, 0);
+  
+  res.json({ 
+    message: 'Account unlocked successfully',
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username
+    }
+  });
+}));
+
+// POST /api/auth/sessions/cleanup - Admin endpoint to cleanup expired sessions
+router.post('/auth/sessions/cleanup', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  await storage.deleteExpiredSessions();
+  res.json({ message: 'Expired sessions cleaned up successfully' });
+}));
+
+// GET /api/auth/sessions/:userId - Admin endpoint to get user sessions
+router.get('/auth/sessions/:userId', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { userId } = req.params;
+  
+  // Check if user exists
+  const user = await storage.getUserById(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  const sessions = await storage.getUserSessions(userId);
+  res.json({ sessions });
+}));
+
+// DELETE /api/auth/sessions/:userId - Admin endpoint to revoke all user sessions
+router.delete('/auth/sessions/:userId', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { userId } = req.params;
+  
+  // Check if user exists
+  const user = await storage.getUserById(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  
+  await storage.deleteUserSessions(userId);
+  res.json({ message: 'All user sessions revoked successfully' });
+}));
+
+// ============================
+// APPLY AUTHENTICATION MIDDLEWARE
+// All routes below this point require authentication
+// ============================
+router.use((req: any, res: any, next: any) => {
+  // Skip authentication for auth routes (already handled above)
+  if (req.path.startsWith('/auth/')) {
+    return next();
+  }
+  
+  // Apply authentication middleware for all other routes
+  authMiddleware(req, res, next);
+});
+
+// ============================
+// PROTECTED ROUTES (Authentication required)
+// ============================
 
 // Profile routes
 router.post('/profiles', asyncHandler(async (req: any, res: any) => {
