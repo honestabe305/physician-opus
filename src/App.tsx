@@ -11,6 +11,7 @@ import PageLoader from "./components/PageLoader";
 import RouteMonitor from "./components/RouteMonitor";
 
 // Lazy load all page components for code splitting
+const LoginPage = lazy(() => import("./pages/LoginPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PhysiciansPage = lazy(() => import("./pages/PhysiciansPage"));
 const NewPhysicianPage = lazy(() => import("./pages/NewPhysicianPage"));
@@ -37,28 +38,40 @@ const App = () => (
         <Sonner />
         <Router>
           <RouteMonitor>
-            <Layout>
-              <Suspense fallback={<PageLoader />}>
-                <Switch>
-                  <Route path="/" component={Dashboard} />
-                  <Route path="/physicians" component={PhysiciansPage} />
-                  <Route path="/physicians/new" component={NewPhysicianPage} />
-                  <Route path="/physicians/:id" component={PhysicianProfilePage} />
-                  <Route path="/physicians/:id/edit" component={EditPhysicianPage} />
-                  <Route path="/physicians/:id/documents" component={PhysicianDocumentsPage} />
-                  <Route path="/search" component={SearchPage} />
-                  <Route path="/demographics" component={DemographicsPage} />
-                  <Route path="/contact" component={ContactPage} />
-                  <Route path="/practice" component={PracticePage} />
-                  <Route path="/licensure" component={LicensurePage} />
-                  <Route path="/education" component={EducationPage} />
-                  <Route path="/work-history" component={WorkHistoryPage} />
-                  <Route path="/documents" component={DocumentsPage} />
-                  <Route path="/settings" component={SettingsPage} />
-                  <Route component={NotFound} />
-                </Switch>
-              </Suspense>
-            </Layout>
+            <Suspense fallback={<PageLoader />}>
+              <Switch>
+                {/* Login page without Layout wrapper */}
+                <Route path="/login" component={LoginPage} />
+                
+                {/* All other pages with Layout wrapper */}
+                <Route>
+                  {() => (
+                    <Layout>
+                      <Suspense fallback={<PageLoader />}>
+                        <Switch>
+                          <Route path="/" component={Dashboard} />
+                          <Route path="/physicians" component={PhysiciansPage} />
+                          <Route path="/physicians/new" component={NewPhysicianPage} />
+                          <Route path="/physicians/:id" component={PhysicianProfilePage} />
+                          <Route path="/physicians/:id/edit" component={EditPhysicianPage} />
+                          <Route path="/physicians/:id/documents" component={PhysicianDocumentsPage} />
+                          <Route path="/search" component={SearchPage} />
+                          <Route path="/demographics" component={DemographicsPage} />
+                          <Route path="/contact" component={ContactPage} />
+                          <Route path="/practice" component={PracticePage} />
+                          <Route path="/licensure" component={LicensurePage} />
+                          <Route path="/education" component={EducationPage} />
+                          <Route path="/work-history" component={WorkHistoryPage} />
+                          <Route path="/documents" component={DocumentsPage} />
+                          <Route path="/settings" component={SettingsPage} />
+                          <Route component={NotFound} />
+                        </Switch>
+                      </Suspense>
+                    </Layout>
+                  )}
+                </Route>
+              </Switch>
+            </Suspense>
           </RouteMonitor>
         </Router>
       </TooltipProvider>
