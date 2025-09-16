@@ -34,13 +34,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { SelectPhysician } from "../../shared/schema";
 
 export default function PhysiciansPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [, setLocation] = useLocation();
   const { preferences, formatDate, getTableRowClass, getTableCellClass } = useDisplayPreferences();
 
   // Debounce search term
@@ -249,23 +250,29 @@ export default function PhysiciansPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="gap-2" data-testid={`action-view-${physician.id}`}>
-                              <Link href={`/physicians/${physician.id}`} className="flex items-center gap-2 w-full">
-                                <Eye className="h-4 w-4" />
-                                View Details
-                              </Link>
+                            <DropdownMenuItem 
+                              className="gap-2" 
+                              data-testid={`action-view-${physician.id}`}
+                              onClick={() => setLocation(`/physicians/${physician.id}`)}
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2" data-testid={`action-edit-${physician.id}`}>
-                              <Link href={`/physicians/${physician.id}/edit`} className="flex items-center gap-2 w-full">
-                                <Edit className="h-4 w-4" />
-                                Edit
-                              </Link>
+                            <DropdownMenuItem 
+                              className="gap-2" 
+                              data-testid={`action-edit-${physician.id}`}
+                              onClick={() => setLocation(`/physicians/${physician.id}/edit`)}
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2" data-testid={`action-documents-${physician.id}`}>
-                              <Link href={`/physicians/${physician.id}/documents`} className="flex items-center gap-2 w-full">
-                                <FileText className="h-4 w-4" />
-                                Documents
-                              </Link>
+                            <DropdownMenuItem 
+                              className="gap-2" 
+                              data-testid={`action-documents-${physician.id}`}
+                              onClick={() => setLocation(`/physicians/${physician.id}/documents`)}
+                            >
+                              <FileText className="h-4 w-4" />
+                              Documents
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

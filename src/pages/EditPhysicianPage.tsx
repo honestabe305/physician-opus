@@ -45,7 +45,7 @@ const editPhysicianSchema = z.object({
   phoneNumbers: z.string().optional(),
   mailingAddress: z.string().optional(),
   dateOfBirth: z.string().optional(),
-  gender: z.enum(["male", "female", "other", ""]).optional(),
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say", ""]).optional(),
   practiceName: z.string().optional(),
   officePhone: z.string().optional(),
   primaryPracticeAddress: z.string().optional(),
@@ -96,12 +96,12 @@ export default function EditPhysicianPage() {
         phoneNumbers: physician.phoneNumbers?.join(", ") || "",
         mailingAddress: physician.mailingAddress || "",
         dateOfBirth: physician.dateOfBirth || "",
-        gender: physician.gender || "",
+        gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "") || "",
         practiceName: physician.practiceName || "",
         officePhone: physician.officePhone || "",
         primaryPracticeAddress: physician.primaryPracticeAddress || "",
         groupNpi: physician.groupNpi || "",
-        status: physician.status || "active",
+        status: (physician.status as "active" | "pending" | "review" | "inactive") || "active",
       });
     }
   }, [physician, form]);
@@ -310,6 +310,7 @@ export default function EditPhysicianPage() {
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
