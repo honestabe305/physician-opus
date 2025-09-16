@@ -1,5 +1,7 @@
-import { eq, like, ilike, and, or, sql } from 'drizzle-orm';
+import { eq, like, ilike, and, or, sql, lt } from 'drizzle-orm';
 import {
+  users,
+  sessions,
   profiles,
   physicians,
   physicianLicenses,
@@ -10,6 +12,10 @@ import {
   physicianCompliance,
   physicianDocuments,
   userSettings,
+  type SelectUser,
+  type InsertUser,
+  type SelectSession,
+  type InsertSession,
   type SelectProfile,
   type InsertProfile,
   type SelectPhysician,
@@ -134,6 +140,30 @@ export interface IStorage {
   getUserSettingsById(id: string): Promise<SelectUserSettings | null>;
   updateUserSettings(userId: string, updates: Partial<InsertUserSettings>): Promise<SelectUserSettings>;
   deleteUserSettings(userId: string): Promise<void>;
+
+  // User authentication operations
+  createUser(user: InsertUser): Promise<SelectUser>;
+  getUserById(id: string): Promise<SelectUser | null>;
+  getUserByEmail(email: string): Promise<SelectUser | null>;
+  getUserByUsername(username: string): Promise<SelectUser | null>;
+  updateUser(id: string, updates: Partial<InsertUser>): Promise<SelectUser>;
+  deleteUser(id: string): Promise<void>;
+  getAllUsers(): Promise<SelectUser[]>;
+  updateLoginAttempts(userId: string, attempts: number): Promise<void>;
+  lockUserAccount(userId: string, until: Date): Promise<void>;
+  unlockUserAccount(userId: string): Promise<void>;
+  updateLastLoginAt(userId: string): Promise<void>;
+
+  // Session management operations
+  createSession(session: InsertSession): Promise<SelectSession>;
+  getSession(sessionToken: string): Promise<SelectSession | null>;
+  getSessionById(id: string): Promise<SelectSession | null>;
+  getUserSessions(userId: string): Promise<SelectSession[]>;
+  deleteSession(sessionToken: string): Promise<void>;
+  deleteSessionById(id: string): Promise<void>;
+  deleteUserSessions(userId: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
+  extendSession(sessionToken: string, newExpiresAt: Date): Promise<SelectSession>;
 
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
@@ -920,6 +950,251 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting user settings:', error);
       throw new Error(`Failed to delete user settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // User authentication operations
+  async createUser(user: InsertUser): Promise<SelectUser> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(users).values(user).returning();
+      if (!result) {
+        throw new Error('Failed to create user');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw new Error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserById(id: string): Promise<SelectUser | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(users).where(eq(users.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting user by id:', error);
+      throw new Error(`Failed to get user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<SelectUser | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(users).where(eq(users.email, email));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting user by email:', error);
+      throw new Error(`Failed to get user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<SelectUser | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(users).where(eq(users.username, username));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting user by username:', error);
+      throw new Error(`Failed to get user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<SelectUser> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(users)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('User not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw new Error(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(users).where(eq(users.id, id));
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw new Error(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllUsers(): Promise<SelectUser[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(users);
+    } catch (error) {
+      console.error('Error getting all users:', error);
+      throw new Error(`Failed to get users: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateLoginAttempts(userId: string, attempts: number): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(users)
+        .set({ failedLoginAttempts: attempts, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      console.error('Error updating login attempts:', error);
+      throw new Error(`Failed to update login attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async lockUserAccount(userId: string, until: Date): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(users)
+        .set({ lockedUntil: until, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      console.error('Error locking user account:', error);
+      throw new Error(`Failed to lock user account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async unlockUserAccount(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(users)
+        .set({ lockedUntil: null, failedLoginAttempts: 0, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      console.error('Error unlocking user account:', error);
+      throw new Error(`Failed to unlock user account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateLastLoginAt(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(users)
+        .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      console.error('Error updating last login:', error);
+      throw new Error(`Failed to update last login: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Session management operations
+  async createSession(session: InsertSession): Promise<SelectSession> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(sessions).values(session).returning();
+      if (!result) {
+        throw new Error('Failed to create session');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating session:', error);
+      throw new Error(`Failed to create session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getSession(sessionToken: string): Promise<SelectSession | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(sessions).where(eq(sessions.sessionToken, sessionToken));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting session:', error);
+      throw new Error(`Failed to get session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getSessionById(id: string): Promise<SelectSession | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(sessions).where(eq(sessions.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting session by id:', error);
+      throw new Error(`Failed to get session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUserSessions(userId: string): Promise<SelectSession[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(sessions).where(eq(sessions.userId, userId));
+    } catch (error) {
+      console.error('Error getting user sessions:', error);
+      throw new Error(`Failed to get user sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteSession(sessionToken: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(sessions).where(eq(sessions.sessionToken, sessionToken));
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      throw new Error(`Failed to delete session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteSessionById(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(sessions).where(eq(sessions.id, id));
+    } catch (error) {
+      console.error('Error deleting session by id:', error);
+      throw new Error(`Failed to delete session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteUserSessions(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(sessions).where(eq(sessions.userId, userId));
+    } catch (error) {
+      console.error('Error deleting user sessions:', error);
+      throw new Error(`Failed to delete user sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+    } catch (error) {
+      console.error('Error deleting expired sessions:', error);
+      throw new Error(`Failed to delete expired sessions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async extendSession(sessionToken: string, newExpiresAt: Date): Promise<SelectSession> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(sessions)
+        .set({ expiresAt: newExpiresAt })
+        .where(eq(sessions.sessionToken, sessionToken))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Session not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error extending session:', error);
+      throw new Error(`Failed to extend session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

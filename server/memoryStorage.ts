@@ -1,5 +1,9 @@
 import type { IStorage } from './storage';
 import {
+  type SelectUser,
+  type InsertUser,
+  type SelectSession,
+  type InsertSession,
   type SelectProfile,
   type InsertProfile,
   type SelectPhysician,
@@ -24,6 +28,8 @@ import {
 
 // Simple in-memory storage implementation
 export class MemoryStorage implements IStorage {
+  private users: SelectUser[] = [];
+  private sessions: SelectSession[] = [];
   private profiles: SelectProfile[] = [];
   private physicians: SelectPhysician[] = [];
   private licenses: SelectPhysicianLicense[] = [];
@@ -493,6 +499,145 @@ export class MemoryStorage implements IStorage {
 
   async deleteUserSettings(userId: string): Promise<void> {
     this.userSettings = this.userSettings.filter(s => s.userId !== userId);
+  }
+
+  // User authentication operations
+  async createUser(user: InsertUser): Promise<SelectUser> {
+    const newUser: SelectUser = {
+      id: this.generateId(),
+      email: user.email,
+      username: user.username,
+      passwordHash: user.passwordHash,
+      role: user.role ?? 'staff',
+      isActive: user.isActive ?? true,
+      failedLoginAttempts: user.failedLoginAttempts ?? 0,
+      lockedUntil: user.lockedUntil ?? null,
+      lastLoginAt: user.lastLoginAt ?? null,
+      lastPasswordChangeAt: user.lastPasswordChangeAt ?? null,
+      twoFactorEnabled: user.twoFactorEnabled ?? false,
+      twoFactorSecret: user.twoFactorSecret ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.users.push(newUser);
+    return newUser;
+  }
+
+  async getUserById(id: string): Promise<SelectUser | null> {
+    return this.users.find(u => u.id === id) || null;
+  }
+
+  async getUserByEmail(email: string): Promise<SelectUser | null> {
+    return this.users.find(u => u.email === email) || null;
+  }
+
+  async getUserByUsername(username: string): Promise<SelectUser | null> {
+    return this.users.find(u => u.username === username) || null;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<SelectUser> {
+    const index = this.users.findIndex(u => u.id === id);
+    if (index === -1) throw new Error('User not found');
+    
+    this.users[index] = {
+      ...this.users[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.users[index];
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    this.users = this.users.filter(u => u.id !== id);
+  }
+
+  async getAllUsers(): Promise<SelectUser[]> {
+    return [...this.users];
+  }
+
+  async updateLoginAttempts(userId: string, attempts: number): Promise<void> {
+    const index = this.users.findIndex(u => u.id === userId);
+    if (index !== -1) {
+      this.users[index].failedLoginAttempts = attempts;
+      this.users[index].updatedAt = new Date();
+    }
+  }
+
+  async lockUserAccount(userId: string, until: Date): Promise<void> {
+    const index = this.users.findIndex(u => u.id === userId);
+    if (index !== -1) {
+      this.users[index].lockedUntil = until;
+      this.users[index].updatedAt = new Date();
+    }
+  }
+
+  async unlockUserAccount(userId: string): Promise<void> {
+    const index = this.users.findIndex(u => u.id === userId);
+    if (index !== -1) {
+      this.users[index].lockedUntil = null;
+      this.users[index].failedLoginAttempts = 0;
+      this.users[index].updatedAt = new Date();
+    }
+  }
+
+  async updateLastLoginAt(userId: string): Promise<void> {
+    const index = this.users.findIndex(u => u.id === userId);
+    if (index !== -1) {
+      this.users[index].lastLoginAt = new Date();
+      this.users[index].updatedAt = new Date();
+    }
+  }
+
+  // Session management operations
+  async createSession(session: InsertSession): Promise<SelectSession> {
+    const newSession: SelectSession = {
+      id: this.generateId(),
+      userId: session.userId,
+      sessionToken: session.sessionToken,
+      expiresAt: session.expiresAt,
+      ipAddress: session.ipAddress ?? null,
+      userAgent: session.userAgent ?? null,
+      createdAt: new Date()
+    };
+    this.sessions.push(newSession);
+    return newSession;
+  }
+
+  async getSession(sessionToken: string): Promise<SelectSession | null> {
+    return this.sessions.find(s => s.sessionToken === sessionToken) || null;
+  }
+
+  async getSessionById(id: string): Promise<SelectSession | null> {
+    return this.sessions.find(s => s.id === id) || null;
+  }
+
+  async getUserSessions(userId: string): Promise<SelectSession[]> {
+    return this.sessions.filter(s => s.userId === userId);
+  }
+
+  async deleteSession(sessionToken: string): Promise<void> {
+    this.sessions = this.sessions.filter(s => s.sessionToken !== sessionToken);
+  }
+
+  async deleteSessionById(id: string): Promise<void> {
+    this.sessions = this.sessions.filter(s => s.id !== id);
+  }
+
+  async deleteUserSessions(userId: string): Promise<void> {
+    this.sessions = this.sessions.filter(s => s.userId !== userId);
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    const now = new Date();
+    this.sessions = this.sessions.filter(s => s.expiresAt > now);
+  }
+
+  async extendSession(sessionToken: string, newExpiresAt: Date): Promise<SelectSession> {
+    const index = this.sessions.findIndex(s => s.sessionToken === sessionToken);
+    if (index === -1) throw new Error('Session not found');
+    
+    this.sessions[index].expiresAt = newExpiresAt;
+    return this.sessions[index];
   }
 
   async getPhysicianFullProfile(physicianId: string) {

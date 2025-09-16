@@ -15,9 +15,39 @@ export const documentTypeEnum = pgEnum('document_type', [
 ]);
 
 // Tables
+
+// Users table for authentication
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  username: text('username').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: userRoleEnum('role').notNull().default('staff'),
+  isActive: boolean('is_active').notNull().default(true),
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  lastPasswordChangeAt: timestamp('last_password_change_at', { withTimezone: true }),
+  twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
+  twoFactorSecret: text('two_factor_secret'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Sessions table for managing user sessions
+export const sessions = pgTable('sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sessionToken: text('session_token').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().unique(),
+  userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
   email: text('email').notNull(),
   fullName: text('full_name').notNull(),
   role: userRoleEnum('role').notNull().default('staff'),
@@ -27,7 +57,7 @@ export const profiles = pgTable('profiles', {
 
 export const userSettings = pgTable('user_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().unique().references(() => profiles.userId),
+  userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
   
   // Application Preferences
   theme: text('theme').default('system'), // 'light', 'dark', 'system'
@@ -97,7 +127,7 @@ export const physicians = pgTable('physicians', {
   
   // Status and metadata
   status: text('status').default('active'),
-  createdBy: uuid('created_by').references(() => profiles.userId),
+  createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -189,12 +219,31 @@ export const physicianDocuments = pgTable('physician_documents', {
   fileSize: integer('file_size'),
   mimeType: text('mime_type'),
   isSensitive: boolean('is_sensitive').default(true),
-  uploadedBy: uuid('uploaded_by').references(() => profiles.userId),
+  uploadedBy: uuid('uploaded_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 // Insert Schemas and Types
+
+// User schemas and types
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertUser = typeof users.$inferInsert;
+export type SelectUser = typeof users.$inferSelect;
+
+// Session schemas and types
+export const insertSessionSchema = createInsertSchema(sessions).omit({
+  id: true,
+  createdAt: true
+});
+export type InsertSession = typeof sessions.$inferInsert;
+export type SelectSession = typeof sessions.$inferSelect;
+
+// Profile schemas and types
 export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true,
   createdAt: true,
