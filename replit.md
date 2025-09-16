@@ -53,10 +53,20 @@ The system uses **PostgreSQL** with **Drizzle ORM** for type-safe database opera
 - **JSONB fields** for flexible data structures
 
 ### Authentication and Authorization
-The system implements role-based access control:
-- **User roles**: admin, staff, viewer with different permission levels
-- **Profile-based authentication** with secure user management
-- **Session-based authentication** ready for implementation
+The system implements comprehensive authentication and role-based access control:
+- **Traditional username/password authentication** with secure bcrypt password hashing
+- **User roles**: admin, staff, viewer with different permission levels  
+- **Session-based authentication** with JWT tokens stored in secure HTTP-only cookies
+- **Protected routes** that redirect unauthenticated users to login page
+- **Session management** with configurable timeout and auto-lock features
+- **Activity logging** tracks all authentication events (login, logout, failed attempts)
+- **Security features**:
+  - Rate limiting (5 login attempts per minute)
+  - Account lockout after 5 failed attempts (15 minute lockout)
+  - Password complexity validation (min 8 chars, uppercase, lowercase, number, special char)
+  - Session extension and remember me functionality (24h default, 7 days with remember me)
+  - Lock screen for temporary session protection without logout
+- **Default admin account**: admin@physiciancrm.com (password: Admin123!@#)
 
 ### Data Validation and Type Safety
 - **Zod schemas** for runtime validation on both client and server
