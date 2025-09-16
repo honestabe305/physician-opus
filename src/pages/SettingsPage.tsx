@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { useNotificationPreferences, COMMON_MEDICAL_STATES } from "@/hooks/use-notification-preferences";
+import { useSecurityPreferences } from "@/hooks/use-security-preferences";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,20 @@ import {
   MapPin,
   CalendarCheck,
   TestTube,
-  CalendarDays
+  CalendarDays,
+  AlertTriangle,
+  Activity,
+  Trash2,
+  KeyRound,
+  Timer,
+  UserCheck,
+  ShieldCheck,
+  ShieldAlert,
+  LogIn,
+  LogOut,
+  Laptop,
+  MapPinned,
+  XCircle
 } from "lucide-react";
 import type { SelectUserSettings } from "../../shared/schema";
 
@@ -113,6 +127,17 @@ export default function SettingsPage() {
     getEnabledCount,
     getEnabledMethods
   } = useNotificationPreferences();
+  const {
+    preferences: securityPreferences,
+    updatePreference: updateSecurityPreference,
+    updatePreferences: updateSecurityPreferences,
+    resetPreferences: resetSecurityPreferences,
+    clearActivityLog,
+    sessionWarningActive,
+    timeUntilTimeout,
+    generateBackupCodes,
+    getPasswordRequirements
+  } = useSecurityPreferences();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
@@ -1656,135 +1681,447 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Security Settings Tab */}
+        {/* Security Settings Tab - Enhanced */}
         <TabsContent value="security" className="space-y-6">
+          {/* Session Management */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Timer className="h-5 w-5" />
+                <CardTitle>Session Management</CardTitle>
+              </div>
+              <CardDescription>
+                Configure session timeout and auto-lock settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="session-timeout">Session Timeout</Label>
+                    <Select 
+                      value={securityPreferences.sessionTimeout.toString()}
+                      onValueChange={(value) => updateSecurityPreference('sessionTimeout', parseInt(value))}
+                    >
+                      <SelectTrigger id="session-timeout" data-testid="select-session-timeout">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15 minutes</SelectItem>
+                        <SelectItem value="30">30 minutes</SelectItem>
+                        <SelectItem value="60">1 hour</SelectItem>
+                        <SelectItem value="120">2 hours</SelectItem>
+                        <SelectItem value="240">4 hours</SelectItem>
+                        <SelectItem value="480">8 hours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically log out after this period of inactivity
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="warning-time">Warning Time</Label>
+                    <Select 
+                      value={securityPreferences.warningTime.toString()}
+                      onValueChange={(value) => updateSecurityPreference('warningTime', parseInt(value))}
+                      disabled={!securityPreferences.showWarningBeforeTimeout}
+                    >
+                      <SelectTrigger id="warning-time" data-testid="select-warning-time">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 minute</SelectItem>
+                        <SelectItem value="2">2 minutes</SelectItem>
+                        <SelectItem value="5">5 minutes</SelectItem>
+                        <SelectItem value="10">10 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Show warning this many minutes before timeout
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <div className="text-base font-medium">Remember Me</div>
+                      <div className="text-sm text-muted-foreground">
+                        Stay logged in for 30 days on this device
+                      </div>
+                    </div>
+                    <Switch
+                      data-testid="switch-remember-me"
+                      checked={securityPreferences.rememberMe}
+                      onCheckedChange={(checked) => updateSecurityPreference('rememberMe', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <div className="text-base font-medium">Auto-Lock</div>
+                      <div className="text-sm text-muted-foreground">
+                        Lock screen instead of logging out on timeout
+                      </div>
+                    </div>
+                    <Switch
+                      data-testid="switch-auto-lock"
+                      checked={securityPreferences.autoLock}
+                      onCheckedChange={(checked) => updateSecurityPreference('autoLock', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <div className="text-base font-medium">Show Warning Before Timeout</div>
+                      <div className="text-sm text-muted-foreground">
+                        Display a warning before session expires
+                      </div>
+                    </div>
+                    <Switch
+                      data-testid="switch-show-warning"
+                      checked={securityPreferences.showWarningBeforeTimeout}
+                      onCheckedChange={(checked) => updateSecurityPreference('showWarningBeforeTimeout', checked)}
+                    />
+                  </div>
+                </div>
+
+                {sessionWarningActive && timeUntilTimeout && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <span>Your session will expire in {Math.ceil(timeUntilTimeout / 60000)} minute(s)</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          updateSecurityPreference('lastActivityTime', Date.now());
+                        }}
+                      >
+                        Stay Logged In
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Activity Monitoring */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  <CardTitle>Activity Monitoring</CardTitle>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearActivityLog}
+                  data-testid="button-clear-activity"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Log
+                </Button>
+              </div>
+              <CardDescription>
+                Track and monitor account activity and login history
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <div className="text-base font-medium">Enable Activity Logging</div>
+                  <div className="text-sm text-muted-foreground">
+                    Track login attempts and account activity
+                  </div>
+                </div>
+                <Switch
+                  data-testid="switch-activity-logging"
+                  checked={securityPreferences.enableActivityLogging}
+                  onCheckedChange={(checked) => updateSecurityPreference('enableActivityLogging', checked)}
+                />
+              </div>
+
+              {securityPreferences.enableActivityLogging && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Recent Activity</h4>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {securityPreferences.activityLog.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No recent activity to display
+                      </p>
+                    ) : (
+                      securityPreferences.activityLog.map((activity) => (
+                        <div 
+                          key={activity.id}
+                          className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                          data-testid={`activity-log-${activity.id}`}
+                        >
+                          <div className="mt-1">
+                            {activity.type === 'login' && (
+                              <LogIn className={`h-4 w-4 ${activity.success ? 'text-green-600' : 'text-red-600'}`} />
+                            )}
+                            {activity.type === 'logout' && (
+                              <LogOut className="h-4 w-4 text-blue-600" />
+                            )}
+                            {activity.type === 'password_change' && (
+                              <KeyRound className="h-4 w-4 text-purple-600" />
+                            )}
+                            {activity.type === 'settings_change' && (
+                              <Settings className="h-4 w-4 text-orange-600" />
+                            )}
+                            {activity.type === 'access_attempt' && (
+                              <ShieldAlert className={`h-4 w-4 ${activity.success ? 'text-green-600' : 'text-red-600'}`} />
+                            )}
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">
+                                {activity.type === 'login' && (activity.success ? 'Successful Login' : 'Failed Login')}
+                                {activity.type === 'logout' && 'Logged Out'}
+                                {activity.type === 'password_change' && 'Password Changed'}
+                                {activity.type === 'settings_change' && 'Settings Updated'}
+                                {activity.type === 'access_attempt' && (activity.success ? 'Access Granted' : 'Access Denied')}
+                              </span>
+                              {!activity.success && (
+                                <Badge variant="destructive" className="text-xs">Failed</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {new Date(activity.timestamp).toLocaleString()}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <MapPinned className="h-3 w-3" />
+                                {activity.ipAddress}
+                              </div>
+                              {activity.location && (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {activity.location}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Laptop className="h-3 w-3" />
+                              {activity.device}
+                            </div>
+                            {activity.details && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {activity.details}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Two-Factor Authentication */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" />
+                <CardTitle>Two-Factor Authentication</CardTitle>
+              </div>
+              <CardDescription>
+                Add an extra layer of security to your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <div className="text-base font-medium">Enable 2FA</div>
+                  <div className="text-sm text-muted-foreground">
+                    Require a second form of authentication
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Coming Soon</Badge>
+                  <Switch
+                    data-testid="switch-two-factor"
+                    checked={securityPreferences.twoFactorEnabled}
+                    onCheckedChange={(checked) => updateSecurityPreference('twoFactorEnabled', checked)}
+                    disabled
+                  />
+                </div>
+              </div>
+
+              {securityPreferences.twoFactorEnabled && (
+                <>
+                  <Alert>
+                    <ShieldCheck className="h-4 w-4" />
+                    <AlertDescription>
+                      Two-factor authentication is enabled. You'll need to enter a verification code from your authenticator app when logging in.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium">Backup Codes</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Generate backup codes in case you lose access to your authenticator
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const codes = generateBackupCodes();
+                          toast({
+                            title: "Backup codes generated",
+                            description: `${codes.length} backup codes have been generated. Store them securely.`
+                          });
+                        }}
+                        disabled={!securityPreferences.twoFactorEnabled}
+                        data-testid="button-generate-backup-codes"
+                      >
+                        Generate Codes
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Security Preferences */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                <CardTitle>Security Settings</CardTitle>
+                <CardTitle>Security Preferences</CardTitle>
               </div>
               <CardDescription>
-                Manage account security, authentication, and access controls
+                Configure additional security settings and requirements
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Form {...securityForm}>
-                <form onSubmit={securityForm.handleSubmit(handleSaveSecuritySettings)} className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Session Management</h3>
-                    <FormField
-                      control={securityForm.control}
-                      name="sessionTimeout"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Session Timeout (seconds)</FormLabel>
-                          <FormControl>
-                            <Select 
-                              value={field.value.toString()} 
-                              onValueChange={(value) => field.onChange(parseInt(value))}
-                            >
-                              <SelectTrigger data-testid="select-session-timeout">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="300">5 minutes</SelectItem>
-                                <SelectItem value="900">15 minutes</SelectItem>
-                                <SelectItem value="1800">30 minutes</SelectItem>
-                                <SelectItem value="3600">1 hour</SelectItem>
-                                <SelectItem value="7200">2 hours</SelectItem>
-                                <SelectItem value="14400">4 hours</SelectItem>
-                                <SelectItem value="28800">8 hours</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormDescription>
-                            Automatically log out after this period of inactivity
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Authentication</h3>
-                    <FormField
-                      control={securityForm.control}
-                      name="twoFactorEnabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Two-Factor Authentication</FormLabel>
-                            <FormDescription>
-                              Add an extra layer of security to your account
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              data-testid="switch-two-factor"
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <Alert>
-                      <Lock className="h-4 w-4" />
-                      <AlertDescription>
-                        Two-factor authentication requires additional setup through your administrator.
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Password Security</h3>
-                    <div className="space-y-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        data-testid="button-change-password"
-                      >
-                        <Lock className="h-4 w-4 mr-2" />
-                        Change Password
-                      </Button>
-                      <p className="text-sm text-muted-foreground">
-                        Password changes require verification and may require administrator approval.
-                      </p>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <div className="text-base font-medium">Require Password for Sensitive Actions</div>
+                    <div className="text-sm text-muted-foreground">
+                      Re-authenticate before performing critical operations
                     </div>
                   </div>
+                  <Switch
+                    data-testid="switch-require-password"
+                    checked={securityPreferences.requirePasswordForSensitiveActions}
+                    onCheckedChange={(checked) => updateSecurityPreference('requirePasswordForSensitiveActions', checked)}
+                  />
+                </div>
 
-                  <div className="flex justify-between pt-6">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleResetSecuritySettings}
-                      data-testid="button-reset-security"
-                    >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Reset to Defaults
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isSaving}
-                      data-testid="button-save-security"
-                    >
-                      {isSaving ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      Save Settings
-                    </Button>
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <div className="text-base font-medium">Show Security Alerts</div>
+                    <div className="text-sm text-muted-foreground">
+                      Display notifications for security-related events
+                    </div>
                   </div>
-                </form>
-              </Form>
+                  <Switch
+                    data-testid="switch-security-alerts"
+                    checked={securityPreferences.showSecurityAlerts}
+                    onCheckedChange={(checked) => updateSecurityPreference('showSecurityAlerts', checked)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password-complexity">Password Complexity Level</Label>
+                  <Select 
+                    value={securityPreferences.passwordComplexityLevel}
+                    onValueChange={(value: 'basic' | 'moderate' | 'strong') => 
+                      updateSecurityPreference('passwordComplexityLevel', value)
+                    }
+                  >
+                    <SelectTrigger id="password-complexity" data-testid="select-password-complexity">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="basic">Basic (8+ characters)</SelectItem>
+                      <SelectItem value="moderate">Moderate (10+ chars, mixed case, numbers)</SelectItem>
+                      <SelectItem value="strong">Strong (12+ chars, mixed case, numbers, symbols)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="rounded-lg border p-3 bg-muted/50">
+                    <h4 className="text-sm font-medium mb-2">Current Requirements:</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      {getPasswordRequirements().map((req, index) => (
+                        <li key={index} className="flex items-center gap-2">
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                          {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="failed-attempts">Lock After Failed Attempts</Label>
+                  <Select 
+                    value={securityPreferences.sessionLockAfterFailedAttempts.toString()}
+                    onValueChange={(value) => updateSecurityPreference('sessionLockAfterFailedAttempts', parseInt(value))}
+                  >
+                    <SelectTrigger id="failed-attempts" data-testid="select-failed-attempts">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">3 attempts</SelectItem>
+                      <SelectItem value="5">5 attempts</SelectItem>
+                      <SelectItem value="10">10 attempts</SelectItem>
+                      <SelectItem value="0">Never lock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Lock account after this many failed login attempts
+                  </p>
+                </div>
+              </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Password requirements apply to all new passwords and password changes across the system.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex justify-between pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    resetSecurityPreferences();
+                    toast({
+                      title: "Security settings reset",
+                      description: "All security preferences have been reset to defaults."
+                    });
+                  }}
+                  data-testid="button-reset-security"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset to Defaults
+                </Button>
+                <Button 
+                  onClick={() => {
+                    toast({
+                      title: "Security settings saved",
+                      description: "Your security preferences have been updated."
+                    });
+                  }}
+                  data-testid="button-save-security"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
