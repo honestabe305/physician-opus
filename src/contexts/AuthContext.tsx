@@ -40,6 +40,7 @@ interface AuthContextType {
   sessionExpiresAt: Date | null;
   sessionTimeRemaining: number | null;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
+  signup: (email: string, username: string, password: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (profile: Profile) => void;
@@ -177,6 +178,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       
       // Error handling is done in the LoginPage component
+      throw error;
+    }
+  }, [setLocation, toast, addActivityLogEntry, updateLastActivity, getDeviceInfo, getIpAddress]);
+
+  // Signup function
+  const signup = useCallback(async (email: string, username: string, password: string, fullName?: string) => {
+    try {
+      const response = await apiRequest('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({ email, username, password, fullName }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response && response.user) {
+        setUser(response.user);
+        setProfile(response.profile || null);
+        setSessionExpiresAt(response.sessionExpiresAt ? new Date(response.sessionExpiresAt) : null);
+        
+        // Log successful signup
+        addActivityLogEntry({
+          type: 'login',
+          ipAddress: getIpAddress(),
+          device: getDeviceInfo(),
+          success: true,
+          details: 'Account created and logged in'
+        });
+        
+        // Update last activity
+        updateLastActivity();
+        
+        // Invalidate any cached queries
+        await queryClient.invalidateQueries();
+        
+        // Redirect to dashboard
+        setLocation('/');
+        
+        toast({
+          title: "Account created successfully",
+          description: "Welcome to PhysicianCRM! Your account has been created and you're now logged in.",
+        });
+      }
+    } catch (error) {
+      // Log failed signup attempt
+      addActivityLogEntry({
+        type: 'access_attempt',
+        ipAddress: getIpAddress(),
+        device: getDeviceInfo(),
+        success: false,
+        details: error instanceof Error ? `Signup failed: ${error.message}` : 'Signup failed'
+      });
+      
+      // Error handling is done in the SignUpPage component
       throw error;
     }
   }, [setLocation, toast, addActivityLogEntry, updateLastActivity, getDeviceInfo, getIpAddress]);
@@ -406,6 +461,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     sessionExpiresAt,
     sessionTimeRemaining,
     login,
+    signup,
     logout,
     checkAuth,
     updateProfile,

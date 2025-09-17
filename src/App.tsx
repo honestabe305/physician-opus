@@ -14,6 +14,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 // Lazy load all page components for code splitting
 const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignUpPage = lazy(() => import("./pages/SignUpPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PhysiciansPage = lazy(() => import("./pages/PhysiciansPage"));
 const NewPhysicianPage = lazy(() => import("./pages/NewPhysicianPage"));
@@ -43,8 +44,9 @@ const App = () => (
             <RouteMonitor>
               <Suspense fallback={<PageLoader />}>
                 <Switch>
-                  {/* Login page without Layout wrapper and without protection */}
+                  {/* Authentication pages without Layout wrapper and without protection */}
                   <Route path="/login" component={LoginPage} />
+                  <Route path="/signup" component={SignUpPage} />
                   
                   {/* All other pages with Layout wrapper and route protection */}
                   <Route>

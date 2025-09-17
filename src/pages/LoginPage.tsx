@@ -25,6 +25,7 @@ import {
   Shield,
   Activity
 } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 
@@ -244,7 +245,15 @@ export default function LoginPage() {
             </Form>
           </CardContent>
           <CardFooter>
-            <div className="text-center w-full space-y-2">
+            <div className="text-center w-full space-y-3">
+              <div className="text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <Link href="/signup" data-testid="link-signup">
+                  <span className="text-primary hover:underline cursor-pointer">
+                    Create account here
+                  </span>
+                </Link>
+              </div>
               <p className="text-xs text-muted-foreground">
                 By signing in, you agree to comply with HIPAA regulations and maintain patient confidentiality
               </p>

@@ -131,6 +131,91 @@ router.post('/auth/register', authMiddleware, adminMiddleware, registerLimiter, 
   });
 }));
 
+// POST /api/auth/signup - Public user registration
+router.post('/auth/signup', registerLimiter, asyncHandler(async (req: any, res: any) => {
+  const { email, username, password, fullName } = req.body;
+  
+  // Validate input
+  if (!email || !username || !password) {
+    return res.status(400).json({ error: 'Email, username, and password are required' });
+  }
+  
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Please provide a valid email address' });
+  }
+  
+  // Validate password complexity
+  const passwordValidation = validatePasswordComplexity(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ 
+      error: 'Password does not meet complexity requirements',
+      details: passwordValidation.errors 
+    });
+  }
+  
+  // Check if user already exists
+  const existingEmail = await storage.getUserByEmail(email);
+  if (existingEmail) {
+    return res.status(409).json({ error: 'User with this email already exists' });
+  }
+  
+  const existingUsername = await storage.getUserByUsername(username);
+  if (existingUsername) {
+    return res.status(409).json({ error: 'User with this username already exists' });
+  }
+  
+  // Hash password and create user - default role is 'staff' for public signups
+  const passwordHash = await hashPassword(password);
+  const user = await storage.createUser({
+    email,
+    username,
+    passwordHash,
+    role: 'staff', // Public signups get staff role by default
+    isActive: true,
+    failedLoginAttempts: 0,
+    twoFactorEnabled: false
+  });
+  
+  // Create default profile for the user
+  await storage.createProfile({
+    userId: user.id,
+    email: user.email,
+    fullName: fullName || username, // Use provided fullName or default to username
+    role: user.role
+  });
+  
+  // Generate session and JWT for immediate login after signup
+  const sessionToken = generateSessionToken();
+  const expiresAt = getSessionExpiry(false); // Don't remember by default
+  const jwtToken = generateJWT(user.id, sessionToken);
+  
+  // Create session
+  const session = await storage.createSession({
+    userId: user.id,
+    sessionToken,
+    expiresAt,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req)
+  });
+  
+  // Get the created profile
+  const profile = await storage.getProfile(user.id);
+  
+  // Set secure HTTP-only cookie
+  res.cookie('sessionToken', jwtToken, getCookieOptions());
+  
+  // Return user without sensitive data and include profile
+  const { passwordHash: _, twoFactorSecret: __, ...safeUser } = user;
+  res.status(201).json({ 
+    message: 'Account created successfully',
+    user: safeUser,
+    profile,
+    sessionExpiresAt: expiresAt.toISOString()
+  });
+}));
+
 // POST /api/auth/login - Login user
 router.post('/auth/login', loginLimiter, asyncHandler(async (req: any, res: any) => {
   const { username, password, rememberMe = false } = req.body;
