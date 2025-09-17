@@ -4,6 +4,10 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { router } from './routes';
 
+// CRITICAL: Force Autoscale deployment NOW - Express server must run in production
+// Updated: September 17, 2025 - PRODUCTION DEPLOYMENT REQUIRED 
+// Expected startup messages: 🚀 Server running on port, 📋 Health check, 🌍 Environment
+
 const app = express();
 // Use PORT env var (defaults to 5000 for Replit compatibility)
 const PORT = parseInt(process.env.PORT || '5000', 10);
