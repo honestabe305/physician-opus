@@ -285,7 +285,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [unlockFromSecurity, updateLastActivity]);
 
   // Check auth on mount and set up axios interceptor
+  // 🚧 TEMPORARY UAT BYPASS - Check for bypass mode
+  const bypassAuth = import.meta.env.VITE_BYPASS_AUTH === 'true';
+  
+  // Mock user for bypass mode
+  const mockUser: User = {
+    id: 'bypass-user-id',
+    email: 'uat@physiciancrm.com',
+    username: 'uat-tester',
+    role: 'admin',
+    isActive: true,
+    twoFactorEnabled: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    lastPasswordChangeAt: null
+  };
+  
+  const mockProfile: Profile = {
+    id: 'bypass-profile-id',
+    userId: 'bypass-user-id',
+    email: 'uat@physiciancrm.com',
+    fullName: 'UAT Test Administrator',
+    role: 'admin',
+    organization: 'PhysicianCRM Testing',
+    department: 'UAT',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
   useEffect(() => {
+    if (bypassAuth) {
+      console.log('🚧 AUTH BYPASS ENABLED - UAT Testing Mode');
+      setUser(mockUser);
+      setProfile(mockProfile);
+      setSessionExpiresAt(new Date(Date.now() + 24 * 60 * 60 * 1000)); // 24 hours
+      setIsLoading(false);
+      return;
+    }
     checkAuth();
 
     // Set up global error handler for 401 responses
@@ -305,12 +342,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    // Note: Keep unauthorized listener even in bypass mode to catch API mismatches
     window.addEventListener('unauthorized', handleUnauthorized);
 
     return () => {
       window.removeEventListener('unauthorized', handleUnauthorized);
     };
-  }, [checkAuth, setLocation, toast]);
+  }, [checkAuth, setLocation, toast, bypassAuth]);
 
   // Add global fetch interceptor to handle 401 responses
   useEffect(() => {
