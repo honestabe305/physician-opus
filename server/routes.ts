@@ -12,6 +12,8 @@ import {
   insertPhysicianDocumentSchema,
   insertUserSettingsSchema,
   insertUserSchema,
+  insertDeaRegistrationSchema,
+  insertCsrLicenseSchema,
   type SelectPhysician,
   type SelectPhysicianLicense,
   type SelectPhysicianCertification,
@@ -21,7 +23,9 @@ import {
   type SelectPhysicianCompliance,
   type SelectPhysicianDocument,
   type SelectUserSettings,
-  type SelectUser
+  type SelectUser,
+  type SelectDeaRegistration,
+  type SelectCsrLicense
 } from '../shared/schema';
 import { z } from 'zod';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
@@ -43,6 +47,23 @@ import {
   LOCKOUT_DURATION_MINUTES
 } from './auth';
 import rateLimit from 'express-rate-limit';
+import {
+  validateProviderRolePermissions,
+  validateLicenseCreation,
+  validateProviderRequirements,
+  checkSupervisionRequirements,
+  validateDocumentRequirements,
+  checkLicenseStatus,
+  validateCompactEligibility,
+  validateDEARequirements,
+  validateCSRRequirements
+} from './middleware/role-validation';
+import {
+  computeDEARenewal,
+  computeCSRRenewal,
+  checkLicenseExpiration,
+  calculateRenewalTimeline
+} from './validation/license-validation';
 
 const router = Router();
 const storage = createStorage();
@@ -684,11 +705,22 @@ router.get('/physicians/npi/:npi', asyncHandler(async (req: any, res: any) => {
   res.json(physician);
 }));
 
-router.put('/physicians/:id', asyncHandler(async (req: any, res: any) => {
-  const validatedData = insertPhysicianSchema.partial().parse(req.body);
-  const physician = await storage.updatePhysician(req.params.id, validatedData);
-  res.json(physician);
-}));
+router.put('/physicians/:id', 
+  validateProviderRolePermissions,
+  validateProviderRequirements,
+  asyncHandler(async (req: any, res: any) => {
+    const validatedData = insertPhysicianSchema.partial().parse(req.body);
+    const physician = await storage.updatePhysician(req.params.id, validatedData);
+    
+    // Include any validation warnings in the response
+    const response: any = { ...physician };
+    if (req.validationErrors && req.validationErrors.length > 0) {
+      response.warnings = req.validationErrors;
+    }
+    
+    res.json(response);
+  })
+);
 
 router.delete('/physicians/:id', asyncHandler(async (req: any, res: any) => {
   await storage.deletePhysician(req.params.id);
@@ -696,14 +728,36 @@ router.delete('/physicians/:id', asyncHandler(async (req: any, res: any) => {
 }));
 
 // Physician License routes
-router.post('/physicians/:physicianId/licenses', asyncHandler(async (req: any, res: any) => {
-  const validatedData = insertPhysicianLicenseSchema.parse({
-    ...req.body,
-    physicianId: req.params.physicianId
-  });
-  const license = await storage.createPhysicianLicense(validatedData);
-  res.status(201).json(license);
-}));
+router.post('/physicians/:physicianId/licenses', 
+  validateLicenseCreation,
+  checkSupervisionRequirements,
+  validateCompactEligibility,
+  asyncHandler(async (req: any, res: any) => {
+    const validatedData = insertPhysicianLicenseSchema.parse({
+      ...req.body,
+      physicianId: req.params.physicianId
+    });
+    const license = await storage.createPhysicianLicense(validatedData);
+    
+    // Calculate and store renewal reminders if this is a new license
+    if (license.expirationDate) {
+      const expirationStatus = checkLicenseExpiration(license.expirationDate);
+      const renewalTimeline = calculateRenewalTimeline(
+        new Date(), // Use current date as licenses don't have issueDate
+        2 // Default 2-year cycle for licenses
+      );
+      
+      // Return enhanced license info with expiration status
+      res.status(201).json({
+        ...license,
+        expirationStatus,
+        renewalTimeline: renewalTimeline.filter(item => item.daysFromNow > 0)
+      });
+    } else {
+      res.status(201).json(license);
+    }
+  })
+);
 
 router.get('/physicians/:physicianId/licenses', asyncHandler(async (req: any, res: any) => {
   const licenses = await storage.getPhysicianLicenses(req.params.physicianId);
@@ -727,11 +781,21 @@ router.get('/licenses/expiring/:days', asyncHandler(async (req: any, res: any) =
   res.json(licenses);
 }));
 
-router.put('/licenses/:id', asyncHandler(async (req: any, res: any) => {
-  const validatedData = insertPhysicianLicenseSchema.partial().parse(req.body);
-  const license = await storage.updatePhysicianLicense(req.params.id, validatedData);
-  res.json(license);
-}));
+router.put('/licenses/:id', 
+  checkLicenseStatus,
+  asyncHandler(async (req: any, res: any) => {
+    const validatedData = insertPhysicianLicenseSchema.partial().parse(req.body);
+    const license = await storage.updatePhysicianLicense(req.params.id, validatedData);
+    
+    // Include expiration status in response
+    const expirationStatus = req.body.expirationStatus || checkLicenseExpiration(license.expirationDate);
+    
+    res.json({
+      ...license,
+      expirationStatus
+    });
+  })
+);
 
 router.delete('/licenses/:id', asyncHandler(async (req: any, res: any) => {
   await storage.deletePhysicianLicense(req.params.id);
@@ -1092,6 +1156,233 @@ router.get('/documents/:id/download', asyncHandler(async (req: any, res: any) =>
     }
     return res.status(500).json({ error: 'Failed to download document' });
   }
+}));
+
+// DEA Registration routes
+router.post('/physicians/:physicianId/dea', 
+  validateDEARequirements,
+  asyncHandler(async (req: any, res: any) => {
+    const validatedData = insertDeaRegistrationSchema.parse({
+      ...req.body,
+      physicianId: req.params.physicianId
+    });
+    const deaRegistration = await storage.createDeaRegistration(validatedData);
+    
+    // Calculate renewal reminders
+    const renewalInfo = computeDEARenewal(deaRegistration);
+    
+    res.status(201).json({
+      ...deaRegistration,
+      renewalInfo
+    });
+  })
+);
+
+router.get('/physicians/:physicianId/dea', asyncHandler(async (req: any, res: any) => {
+  const deaRegistrations = await storage.getDeaRegistrationsByPhysician(req.params.physicianId);
+  
+  // Add renewal info to each registration
+  const registrationsWithRenewal = deaRegistrations.map(dea => ({
+    ...dea,
+    renewalInfo: computeDEARenewal(dea),
+    expirationStatus: checkLicenseExpiration(dea.expireDate)
+  }));
+  
+  res.json(registrationsWithRenewal);
+}));
+
+router.get('/physicians/:physicianId/dea/:state', asyncHandler(async (req: any, res: any) => {
+  const deaRegistration = await storage.getDeaRegistrationByState(
+    req.params.physicianId,
+    req.params.state
+  );
+  
+  if (!deaRegistration) {
+    return res.status(404).json({ error: 'DEA registration not found for this state' });
+  }
+  
+  res.json({
+    ...deaRegistration,
+    renewalInfo: computeDEARenewal(deaRegistration),
+    expirationStatus: checkLicenseExpiration(deaRegistration.expireDate)
+  });
+}));
+
+router.get('/dea/:id', asyncHandler(async (req: any, res: any) => {
+  const deaRegistration = await storage.getDeaRegistration(req.params.id);
+  if (!deaRegistration) {
+    return res.status(404).json({ error: 'DEA registration not found' });
+  }
+  
+  res.json({
+    ...deaRegistration,
+    renewalInfo: computeDEARenewal(deaRegistration),
+    expirationStatus: checkLicenseExpiration(deaRegistration.expireDate)
+  });
+}));
+
+router.get('/dea/expiring/:days', asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.params.days);
+  if (isNaN(days) || days < 0) {
+    return res.status(400).json({ error: 'Days must be a non-negative number' });
+  }
+  
+  const expiringDEAs = await storage.getExpiringDeaRegistrations(days);
+  
+  const deasWithRenewal = expiringDEAs.map(dea => ({
+    ...dea,
+    renewalInfo: computeDEARenewal(dea),
+    expirationStatus: checkLicenseExpiration(dea.expireDate)
+  }));
+  
+  res.json(deasWithRenewal);
+}));
+
+router.put('/dea/:id', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertDeaRegistrationSchema.partial().parse(req.body);
+  const deaRegistration = await storage.updateDeaRegistration(req.params.id, validatedData);
+  
+  res.json({
+    ...deaRegistration,
+    renewalInfo: computeDEARenewal(deaRegistration),
+    expirationStatus: checkLicenseExpiration(deaRegistration.expireDate)
+  });
+}));
+
+router.delete('/dea/:id', asyncHandler(async (req: any, res: any) => {
+  await storage.deleteDeaRegistration(req.params.id);
+  res.status(204).send();
+}));
+
+// CSR License routes
+router.post('/physicians/:physicianId/csr', 
+  validateCSRRequirements,
+  asyncHandler(async (req: any, res: any) => {
+    const validatedData = insertCsrLicenseSchema.parse({
+      ...req.body,
+      physicianId: req.params.physicianId
+    });
+    const csrLicense = await storage.createCsrLicense(validatedData);
+    
+    // Calculate renewal reminders based on state
+    const renewalInfo = computeCSRRenewal(csrLicense, req.body.state);
+    
+    res.status(201).json({
+      ...csrLicense,
+      renewalInfo
+    });
+  })
+);
+
+router.get('/physicians/:physicianId/csr', asyncHandler(async (req: any, res: any) => {
+  const csrLicenses = await storage.getCsrLicensesByPhysician(req.params.physicianId);
+  
+  // Add renewal info to each license
+  const licensesWithRenewal = csrLicenses.map(csr => ({
+    ...csr,
+    renewalInfo: computeCSRRenewal(csr, csr.state),
+    expirationStatus: checkLicenseExpiration(csr.expireDate)
+  }));
+  
+  res.json(licensesWithRenewal);
+}));
+
+router.get('/physicians/:physicianId/csr/:state', asyncHandler(async (req: any, res: any) => {
+  const csrLicense = await storage.getCsrLicenseByState(
+    req.params.physicianId,
+    req.params.state
+  );
+  
+  if (!csrLicense) {
+    return res.status(404).json({ error: 'CSR license not found for this state' });
+  }
+  
+  res.json({
+    ...csrLicense,
+    renewalInfo: computeCSRRenewal(csrLicense, csrLicense.state),
+    expirationStatus: checkLicenseExpiration(csrLicense.expireDate)
+  });
+}));
+
+router.get('/csr/:id', asyncHandler(async (req: any, res: any) => {
+  const csrLicense = await storage.getCsrLicense(req.params.id);
+  if (!csrLicense) {
+    return res.status(404).json({ error: 'CSR license not found' });
+  }
+  
+  res.json({
+    ...csrLicense,
+    renewalInfo: computeCSRRenewal(csrLicense, csrLicense.state),
+    expirationStatus: checkLicenseExpiration(csrLicense.expireDate)
+  });
+}));
+
+router.get('/csr/expiring/:days', asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.params.days);
+  if (isNaN(days) || days < 0) {
+    return res.status(400).json({ error: 'Days must be a non-negative number' });
+  }
+  
+  const expiringCSRs = await storage.getExpiringCsrLicenses(days);
+  
+  const csrsWithRenewal = expiringCSRs.map(csr => ({
+    ...csr,
+    renewalInfo: computeCSRRenewal(csr, csr.state),
+    expirationStatus: checkLicenseExpiration(csr.expireDate)
+  }));
+  
+  res.json(csrsWithRenewal);
+}));
+
+router.put('/csr/:id', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertCsrLicenseSchema.partial().parse(req.body);
+  const csrLicense = await storage.updateCsrLicense(req.params.id, validatedData);
+  
+  res.json({
+    ...csrLicense,
+    renewalInfo: computeCSRRenewal(csrLicense, csrLicense.state),
+    expirationStatus: checkLicenseExpiration(csrLicense.expireDate)
+  });
+}));
+
+router.delete('/csr/:id', asyncHandler(async (req: any, res: any) => {
+  await storage.deleteCsrLicense(req.params.id);
+  res.status(204).send();
+}));
+
+// Provider Role Validation endpoint
+router.post('/validate/provider-role', asyncHandler(async (req: any, res: any) => {
+  const { physicianId, state } = req.body;
+  
+  if (!physicianId || !state) {
+    return res.status(400).json({ error: 'Physician ID and state are required' });
+  }
+  
+  const physician = await storage.getPhysician(physicianId);
+  if (!physician) {
+    return res.status(404).json({ error: 'Physician not found' });
+  }
+  
+  // Get role policy and validate (only if provider role is defined)
+  const rolePolicy = physician.providerRole 
+    ? await storage.getRolePolicyByRoleAndState(physician.providerRole, state)
+    : null;
+  
+  const { validateProviderRole, stateRequiresNPCollaboration, stateRequiresPASupervision, isCompactEligible, getStateBoardType } = require('./validation/license-validation');
+  
+  const validation = physician.providerRole ? validateProviderRole(physician, state, rolePolicy) : { valid: false, errors: ['Provider role is not defined'] };
+  
+  res.json({
+    valid: validation.valid,
+    errors: validation.errors,
+    requirements: {
+      requiresSupervision: physician.providerRole === 'pa' && stateRequiresPASupervision(state),
+      requiresCollaboration: physician.providerRole === 'np' && stateRequiresNPCollaboration(state),
+      compactEligible: physician.providerRole ? isCompactEligible(physician.providerRole, state) : false,
+      boardType: physician.providerRole ? getStateBoardType(physician.providerRole, state) : 'Unknown'
+    },
+    rolePolicy
+  });
 }));
 
 // User Settings routes
