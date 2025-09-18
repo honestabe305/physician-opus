@@ -14,6 +14,7 @@ import {
   insertUserSchema,
   insertDeaRegistrationSchema,
   insertCsrLicenseSchema,
+  insertNotificationSchema,
   type SelectPhysician,
   type SelectPhysicianLicense,
   type SelectPhysicianCertification,
@@ -25,7 +26,8 @@ import {
   type SelectUserSettings,
   type SelectUser,
   type SelectDeaRegistration,
-  type SelectCsrLicense
+  type SelectCsrLicense,
+  type SelectNotification
 } from '../shared/schema';
 import { z } from 'zod';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
@@ -64,6 +66,8 @@ import {
   checkLicenseExpiration,
   calculateRenewalTimeline
 } from './validation/license-validation';
+import { NotificationService } from './services/notification-service';
+import { getScheduler } from './services/scheduler';
 
 const router = Router();
 const storage = createStorage();
@@ -1416,6 +1420,80 @@ router.put('/user-settings/:userId', asyncHandler(async (req: any, res: any) => 
 router.delete('/user-settings/:userId', asyncHandler(async (req: any, res: any) => {
   await storage.deleteUserSettings(req.params.userId);
   res.status(204).send();
+}));
+
+// ============================
+// NOTIFICATION ROUTES
+// ============================
+
+// Initialize notification service and scheduler
+const notificationService = new NotificationService(storage);
+const scheduler = getScheduler(storage);
+
+// GET /api/notifications/upcoming - Get all upcoming notifications
+router.get('/notifications/upcoming', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.query.days as string) || 90;
+  const notifications = await notificationService.getUpcomingNotifications(days);
+  res.json(notifications);
+}));
+
+// GET /api/notifications/physician/:id - Get notifications for specific physician
+router.get('/notifications/physician/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const physicianId = req.params.id;
+  const notifications = await notificationService.getPhysicianNotifications(physicianId);
+  res.json(notifications);
+}));
+
+// POST /api/notifications/test/:physicianId - Test notification for a physician
+router.post('/notifications/test/:physicianId', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const physicianId = req.params.physicianId;
+  
+  try {
+    await scheduler.testPhysicianNotification(physicianId);
+    res.json({ message: 'Test notification sent successfully' });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to send test notification',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
+// PUT /api/notifications/:id/mark-read - Mark notification as read
+router.put('/notifications/:id/mark-read', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const notificationId = req.params.id;
+  await notificationService.markNotificationRead(notificationId);
+  res.json({ message: 'Notification marked as read' });
+}));
+
+// POST /api/notifications/check-expirations - Manually trigger expiration check (admin only)
+router.post('/notifications/check-expirations', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  await scheduler.runExpirationCheckNow();
+  res.json({ message: 'Expiration check completed' });
+}));
+
+// POST /api/notifications/process-queue - Manually process notification queue (admin only)
+router.post('/notifications/process-queue', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  await scheduler.processQueueNow();
+  res.json({ message: 'Notification queue processed' });
+}));
+
+// GET /api/notifications/scheduler/status - Get scheduler status (admin only)
+router.get('/notifications/scheduler/status', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const status = scheduler.getStatus();
+  res.json(status);
+}));
+
+// POST /api/notifications/scheduler/start - Start the notification scheduler (admin only)
+router.post('/notifications/scheduler/start', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  await scheduler.start();
+  res.json({ message: 'Notification scheduler started' });
+}));
+
+// POST /api/notifications/scheduler/stop - Stop the notification scheduler (admin only)
+router.post('/notifications/scheduler/stop', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  scheduler.stop();
+  res.json({ message: 'Notification scheduler stopped' });
 }));
 
 // System Information route

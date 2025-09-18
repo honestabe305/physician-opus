@@ -17,6 +17,7 @@ import { getDisplayName, getInitials, getUserRole, getUserEmail } from "@/lib/us
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { NotificationBadge } from "@/components/NotificationBadge";
 
 import {
   Sidebar,
@@ -100,6 +101,8 @@ export function AppSidebar() {
                 )}
               </div>
             )}
+            {/* Notification Badge */}
+            <NotificationBadge />
           </div>
           {!collapsed && profile?.department && (
             <div className="mt-3 text-xs text-muted-foreground">

@@ -3,6 +3,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useDisplayPreferences } from "@/hooks/use-display-preferences";
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { NotificationsDropdown } from "@/components/NotificationsDropdown";
+import { NotificationPanel } from "@/components/NotificationPanel";
+import { ExpirationTimeline } from "@/components/ExpirationTimeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -341,35 +343,10 @@ export default function Dashboard() {
           </CardContent>
         </Card>
         
-        {/* Recent Activity */}
-        <Card className="lg:col-span-2 border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
-            <CardDescription>Latest updates and changes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30" data-testid={`activity-${activity.id}`}>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{activity.physician}</p>
-                    <p className="text-sm text-muted-foreground">{activity.action}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">{activity.time}</span>
-                    <Badge 
-                      variant={activity.status === "completed" ? "default" : 
-                              activity.status === "pending" ? "secondary" : "outline"}
-                      className="text-xs"
-                    >
-                      {activity.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Notification Panel */}
+        <div className="lg:col-span-2">
+          <NotificationPanel />
+        </div>
 
         {/* System Alerts */}
         <Card className="border-border/50 shadow-sm">
@@ -412,6 +389,11 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+        
+        {/* Expiration Timeline - Full Width */}
+        <div className="lg:col-span-3">
+          <ExpirationTimeline />
+        </div>
       </div>
     </div>
   );

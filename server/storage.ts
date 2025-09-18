@@ -16,6 +16,7 @@ import {
   csrLicenses,
   rolePolicies,
   licenseDocuments,
+  notifications,
   type SelectUser,
   type InsertUser,
   type SelectSession,
@@ -48,6 +49,8 @@ import {
   type InsertRolePolicy,
   type SelectLicenseDocument,
   type InsertLicenseDocument,
+  type SelectNotification,
+  type InsertNotification,
 } from '../shared/schema';
 import { MemoryStorage } from './memoryStorage';
 
@@ -212,6 +215,21 @@ export interface IStorage {
   updateLicenseDocument(id: string, updates: Partial<InsertLicenseDocument>): Promise<SelectLicenseDocument>;
   deleteLicenseDocument(id: string): Promise<void>;
   archiveLicenseDocument(id: string): Promise<void>;
+
+  // Notification operations
+  createNotification(notification: InsertNotification): Promise<SelectNotification>;
+  getNotification(id: string): Promise<SelectNotification | null>;
+  getNotificationsByPhysician(physicianId: string): Promise<SelectNotification[]>;
+  getUpcomingNotifications(days?: number): Promise<SelectNotification[]>;
+  getPendingNotifications(): Promise<SelectNotification[]>;
+  getFailedNotifications(): Promise<SelectNotification[]>;
+  updateNotification(id: string, updates: Partial<InsertNotification>): Promise<SelectNotification>;
+  markNotificationSent(id: string, sentAt: Date): Promise<SelectNotification>;
+  markNotificationFailed(id: string, errorMessage: string): Promise<SelectNotification>;
+  markNotificationRead(id: string): Promise<SelectNotification>;
+  deleteNotification(id: string): Promise<void>;
+  deleteOldNotifications(olderThan: Date): Promise<void>;
+  getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]>;
 
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{

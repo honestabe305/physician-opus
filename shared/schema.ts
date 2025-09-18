@@ -23,6 +23,11 @@ export const licenseDocumentTypeEnum = pgEnum('license_document_type', [
   'collaboration_agreement', 'cme_cert', 'mate_cert'
 ]);
 
+// Notification enums
+export const notificationTypeEnum = pgEnum('notification_type', ['license', 'dea', 'csr']);
+export const notificationStatusEnum = pgEnum('notification_status', ['pending', 'sent', 'failed', 'read']);
+export const notificationSeverityEnum = pgEnum('notification_severity', ['info', 'warning', 'critical']);
+
 // Tables
 
 // Users table for authentication
@@ -299,6 +304,26 @@ export const licenseDocuments = pgTable('license_documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// Notifications table for expiration tracking
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  type: notificationTypeEnum('type').notNull(),
+  entityId: uuid('entity_id').notNull(), // Reference to license/dea/csr ID
+  notificationDate: date('notification_date').notNull(),
+  daysBeforeExpiry: integer('days_before_expiry').notNull(), // 90/60/30/7/1
+  severity: notificationSeverityEnum('severity').notNull().default('info'),
+  sentStatus: notificationStatusEnum('sent_status').notNull().default('pending'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  errorMessage: text('error_message'),
+  providerName: text('provider_name').notNull(),
+  licenseType: text('license_type').notNull(),
+  state: text('state').notNull(),
+  expirationDate: date('expiration_date').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 // Insert Schemas and Types
 
 // User schemas and types
@@ -434,3 +459,12 @@ export const insertLicenseDocumentSchema = createInsertSchema(licenseDocuments).
 });
 export type InsertLicenseDocument = typeof licenseDocuments.$inferInsert;
 export type SelectLicenseDocument = typeof licenseDocuments.$inferSelect;
+
+// Notifications schemas and types
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertNotification = typeof notifications.$inferInsert;
+export type SelectNotification = typeof notifications.$inferSelect;
