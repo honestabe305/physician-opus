@@ -413,7 +413,25 @@ router.get('/auth/activity-log', authMiddleware, asyncHandler(async (req: any, r
 // GET /api/auth/me - Get current user info
 router.get('/auth/me', authMiddleware, asyncHandler(async (req: any, res: any) => {
   // Get user profile
-  const profile = await storage.getProfile(req.user!.id);
+  let profile = await storage.getProfile(req.user!.id);
+  
+  // 🚧 TEMPORARY UAT BYPASS - Create mock profile if none exists in bypass mode
+  if (!profile && process.env.BYPASS_AUTH === 'true' && req.user!.id === 'bypass-user-id') {
+    console.log('🚧 Creating mock profile for UAT bypass mode');
+    profile = {
+      id: 'bypass-profile-id',
+      userId: 'bypass-user-id',
+      email: 'uat@physiciancrm.com',
+      fullName: 'UAT Test Administrator',
+      phoneNumber: null,
+      profilePhoto: null,
+      role: 'admin',
+      organization: 'PhysicianCRM Testing',
+      department: 'UAT',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
   
   // Get user settings - handle if it doesn't exist
   let settings: any = null;
