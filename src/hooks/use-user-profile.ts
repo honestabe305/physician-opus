@@ -1,5 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 
+/**
+ * @deprecated SECURITY WARNING: This hook is deprecated due to security vulnerabilities.
+ * 
+ * This hook stores user data in localStorage and provides mock/default data,
+ * which can lead to security issues and user data bleeding vulnerabilities.
+ * 
+ * INSTEAD USE: AuthContext (src/contexts/AuthContext.tsx) which provides:
+ * - Session-bound user authentication
+ * - Secure user profile data
+ * - Protection against user data bleeding
+ * 
+ * This hook will be removed in a future version.
+ */
 export interface UserProfile {
   // Personal Information
   fullName: string;
@@ -55,6 +68,8 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 export function useUserProfile() {
+  console.warn("🚨 SECURITY WARNING: use-user-profile hook is deprecated due to security vulnerabilities. Use AuthContext instead.");
+  
   const [profile, setProfile] = useState<UserProfile>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);

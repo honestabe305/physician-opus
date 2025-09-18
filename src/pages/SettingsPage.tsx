@@ -140,8 +140,7 @@ type AppPreferences = z.infer<typeof appPreferencesSchema>;
 type DataManagement = z.infer<typeof dataManagementSchema>;
 type SecuritySettings = z.infer<typeof securitySettingsSchema>;
 
-// Mock current user ID - in real app this would come from auth context
-const CURRENT_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
+// All user data now comes exclusively from AuthContext for security
 
 export default function SettingsPage() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -186,10 +185,10 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("user-profile");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch user settings (make optional)
+  // Fetch user settings via session-bound endpoint (secure)
   const { data: userSettings, isLoading: settingsLoading, error: settingsError } = useQuery({
-    queryKey: [`/user-settings/${CURRENT_USER_ID}`],
-    queryFn: () => apiRequest(`/user-settings/${CURRENT_USER_ID}`),
+    queryKey: ['/me/settings'],
+    queryFn: () => apiRequest('/me/settings'),
     retry: false,
     enabled: false // Disable for now since API doesn't exist yet
   });
@@ -201,13 +200,10 @@ export default function SettingsPage() {
     enabled: false // Disable for now since API doesn't exist yet
   });
 
-  // Fetch user profile (make optional)
-  const { data: fetchedUserProfile, isLoading: profileLoading } = useQuery({
-    queryKey: [`/profiles/user/${CURRENT_USER_ID}`],
-    queryFn: () => apiRequest(`/profiles/user/${CURRENT_USER_ID}`),
-    retry: false,
-    enabled: false // Disable for now since API doesn't exist yet
-  });
+  // User profile data comes exclusively from AuthContext (secure)
+  // No separate API call needed - prevents user data bleeding vulnerability
+  const fetchedUserProfile = null;
+  const profileLoading = false;
 
   // Form configurations
   const userProfileForm = useForm<UserProfileFormData>({
@@ -257,16 +253,16 @@ export default function SettingsPage() {
     }
   });
 
-  // Update user settings mutation
+  // Update user settings via session-bound endpoint (secure)
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<SelectUserSettings>) => {
-      return apiRequest(`/user-settings/${CURRENT_USER_ID}`, {
+      return apiRequest('/me/settings', {
         method: 'PUT',
         body: JSON.stringify(data)
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/user-settings/${CURRENT_USER_ID}`] });
+      queryClient.invalidateQueries({ queryKey: ['/me/settings'] });
       toast({
         title: "Settings saved",
         description: "Your preferences have been updated successfully."
@@ -281,16 +277,16 @@ export default function SettingsPage() {
     }
   });
 
-  // Create user settings mutation for first time
+  // Create user settings via session-bound endpoint (secure)
   const createSettingsMutation = useMutation({
     mutationFn: (data: Partial<SelectUserSettings>) => {
-      return apiRequest('/user-settings', {
+      return apiRequest('/me/settings', {
         method: 'POST',
-        body: JSON.stringify({ userId: CURRENT_USER_ID, ...data })
+        body: JSON.stringify(data) // userId automatically derived from session
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/user-settings/${CURRENT_USER_ID}`] });
+      queryClient.invalidateQueries({ queryKey: ['/me/settings'] });
       toast({
         title: "Settings created",
         description: "Your preferences have been saved successfully."
