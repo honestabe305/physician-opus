@@ -50,6 +50,7 @@ const navigation = [
       { title: "Contact Info", url: "/contact", icon: FileText },
       { title: "Practice Info", url: "/practice", icon: Building2 },
       { title: "Licensure", url: "/licensure", icon: Shield },
+      { title: "DEA/CSR Management", url: "/dea-csr", icon: Shield },
       { title: "Education", url: "/education", icon: GraduationCap },
       { title: "Work History", url: "/work-history", icon: Clock },
       { title: "Renewal Workflows", url: "/renewal-workflows", icon: RefreshCcw },

@@ -34,6 +34,7 @@ const PhysicianDocumentsPage = lazy(() => import("./pages/PhysicianDocumentsPage
 const DocumentManagementPage = lazy(() => import("./pages/DocumentManagementPage"));
 const RenewalWorkflowPage = lazy(() => import("./pages/RenewalWorkflowPage"));
 const AnalyticsDashboardPage = lazy(() => import("./pages/AnalyticsDashboardPage"));
+const DeaCsrDashboardPage = lazy(() => import("./pages/DeaCsrDashboardPage"));
 
 
 const App = () => (
@@ -69,6 +70,7 @@ const App = () => (
                               <Route path="/contact" component={ContactPage} />
                               <Route path="/practice" component={PracticePage} />
                               <Route path="/licensure" component={LicensurePage} />
+                              <Route path="/dea-csr" component={DeaCsrDashboardPage} />
                               <Route path="/education" component={EducationPage} />
                               <Route path="/work-history" component={WorkHistoryPage} />
                               <Route path="/documents" component={DocumentsPage} />
