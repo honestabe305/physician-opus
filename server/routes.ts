@@ -423,13 +423,9 @@ router.get('/auth/me', authMiddleware, asyncHandler(async (req: any, res: any) =
       userId: 'bypass-user-id',
       email: 'uat@physiciancrm.com',
       fullName: 'UAT Test Administrator',
-      phoneNumber: null,
-      profilePhoto: null,
       role: 'admin',
-      organization: 'PhysicianCRM Testing',
-      department: 'UAT',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
   }
   

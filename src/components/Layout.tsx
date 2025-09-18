@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Moon, Sun, Monitor, User, LogOut } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { getDisplayName, getInitials, getUserRole, getUserEmail } from "@/lib/user-display-utils";
 import { useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,27 +24,6 @@ export default function Layout({ children }: LayoutProps) {
   const { user, profile, logout } = useAuth();
   const [, setLocation] = useLocation();
   
-  // Helper functions for user display
-  const getInitials = () => {
-    if (profile?.fullName) {
-      const names = profile.fullName.trim().split(' ');
-      if (names.length >= 2) {
-        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
-      }
-      return names[0][0].toUpperCase();
-    }
-    if (user?.username) {
-      return user.username.substring(0, 2).toUpperCase();
-    }
-    return 'U';
-  };
-  
-  const getDisplayName = () => {
-    if (profile?.fullName) return profile.fullName;
-    if (user?.username) return user.username;
-    if (user?.email) return user.email;
-    return 'User';
-  };
 
   return (
     <SidebarProvider>
@@ -101,16 +81,16 @@ export default function Layout({ children }: LayoutProps) {
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={profile?.profilePhoto} />
                       <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                        {getInitials()}
+                        {getInitials(user, profile)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="text-left hidden lg:block">
                       <p className="text-sm font-medium text-foreground" data-testid="header-username">
-                        {getDisplayName()}
+                        {getDisplayName(user, profile)}
                       </p>
-                      {(profile?.role || user?.role) && (
+                      {getUserRole(user, profile) && (
                         <p className="text-xs text-muted-foreground" data-testid="header-role">
-                          {profile?.role || user?.role}
+                          {getUserRole(user, profile)}
                         </p>
                       )}
                     </div>
@@ -118,8 +98,8 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5">
-                    <p className="text-sm font-medium">{getDisplayName()}</p>
-                    <p className="text-xs text-muted-foreground">{profile?.email || user?.email}</p>
+                    <p className="text-sm font-medium">{getDisplayName(user, profile)}</p>
+                    <p className="text-xs text-muted-foreground">{getUserEmail(user, profile)}</p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 

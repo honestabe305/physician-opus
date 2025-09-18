@@ -267,6 +267,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         sessionTimerRef.current = null;
       }
       
+      // Clear localStorage to prevent stale cached data
+      localStorage.removeItem('physician-crm-user-profile');
+      
       // Clear all cached data
       queryClient.clear();
       
