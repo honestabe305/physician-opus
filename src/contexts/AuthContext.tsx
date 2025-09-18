@@ -69,6 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<Date | null>(null);
   const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number | null>(null);
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -158,9 +159,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
-        // Redirect to dashboard or originally requested page
+        // Set pending redirect - will be handled by useEffect after user state is updated
         const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
-        setLocation(redirectTo);
+        setPendingRedirect(redirectTo);
         
         toast({
           title: "Login successful",
@@ -213,8 +214,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
-        // Redirect to dashboard
-        setLocation('/');
+        // Set pending redirect for dashboard - will be handled by useEffect after user state is updated
+        setPendingRedirect('/');
         
         toast({
           title: "Account created successfully",
@@ -455,6 +456,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSessionTimeRemaining(null);
     }
   }, [sessionExpiresAt, user, logout, sessionWarningActive]);
+
+  // Handle pending redirects after user state is updated
+  useEffect(() => {
+    if (user && pendingRedirect && !isLoading) {
+      // User is authenticated and we have a pending redirect
+      // Use setTimeout to ensure redirect happens after current render cycle
+      setTimeout(() => {
+        setLocation(pendingRedirect);
+        setPendingRedirect(null); // Clear the pending redirect
+      }, 0);
+    }
+  }, [user, pendingRedirect, isLoading, setLocation]);
 
   const value: AuthContextType = {
     user,
