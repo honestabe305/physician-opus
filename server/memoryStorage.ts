@@ -24,6 +24,14 @@ import {
   type InsertPhysicianDocument,
   type SelectUserSettings,
   type InsertUserSettings,
+  type SelectDeaRegistration,
+  type InsertDeaRegistration,
+  type SelectCsrLicense,
+  type InsertCsrLicense,
+  type SelectRolePolicy,
+  type InsertRolePolicy,
+  type SelectLicenseDocument,
+  type InsertLicenseDocument,
 } from '../shared/schema';
 
 // Simple in-memory storage implementation
@@ -40,6 +48,10 @@ export class MemoryStorage implements IStorage {
   private compliance: SelectPhysicianCompliance[] = [];
   private documents: SelectPhysicianDocument[] = [];
   private userSettings: SelectUserSettings[] = [];
+  private deaRegistrations: SelectDeaRegistration[] = [];
+  private csrLicenses: SelectCsrLicense[] = [];
+  private rolePolicies: SelectRolePolicy[] = [];
+  private licenseDocuments: SelectLicenseDocument[] = [];
 
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
@@ -640,6 +652,262 @@ export class MemoryStorage implements IStorage {
     return this.sessions[index];
   }
 
+  // DEA Registration operations
+  async createDeaRegistration(registration: InsertDeaRegistration): Promise<SelectDeaRegistration> {
+    const newRegistration: SelectDeaRegistration = {
+      id: this.generateId(),
+      physicianId: registration.physicianId,
+      state: registration.state,
+      deaNumber: registration.deaNumber,
+      issueDate: registration.issueDate,
+      expireDate: registration.expireDate,
+      mateAttested: registration.mateAttested ?? false,
+      status: registration.status ?? 'active',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.deaRegistrations.push(newRegistration);
+    return newRegistration;
+  }
+
+  async getDeaRegistration(id: string): Promise<SelectDeaRegistration | null> {
+    return this.deaRegistrations.find(d => d.id === id) || null;
+  }
+
+  async getDeaRegistrationsByPhysician(physicianId: string): Promise<SelectDeaRegistration[]> {
+    return this.deaRegistrations.filter(d => d.physicianId === physicianId);
+  }
+
+  async getDeaRegistrationByState(physicianId: string, state: string): Promise<SelectDeaRegistration | null> {
+    return this.deaRegistrations.find(d => d.physicianId === physicianId && d.state === state) || null;
+  }
+
+  async updateDeaRegistration(id: string, updates: Partial<InsertDeaRegistration>): Promise<SelectDeaRegistration> {
+    const index = this.deaRegistrations.findIndex(d => d.id === id);
+    if (index === -1) throw new Error('DEA registration not found');
+    
+    this.deaRegistrations[index] = {
+      ...this.deaRegistrations[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.deaRegistrations[index];
+  }
+
+  async deleteDeaRegistration(id: string): Promise<void> {
+    this.deaRegistrations = this.deaRegistrations.filter(d => d.id !== id);
+  }
+
+  async getExpiringDeaRegistrations(days: number): Promise<SelectDeaRegistration[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    const today = new Date();
+    
+    return this.deaRegistrations.filter(d => {
+      const expireDate = new Date(d.expireDate);
+      return expireDate <= futureDate && expireDate >= today;
+    });
+  }
+
+  // CSR License operations
+  async createCsrLicense(license: InsertCsrLicense): Promise<SelectCsrLicense> {
+    const newLicense: SelectCsrLicense = {
+      id: this.generateId(),
+      physicianId: license.physicianId,
+      state: license.state,
+      csrNumber: license.csrNumber,
+      issueDate: license.issueDate,
+      expireDate: license.expireDate,
+      renewalCycle: license.renewalCycle,
+      status: license.status ?? 'active',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.csrLicenses.push(newLicense);
+    return newLicense;
+  }
+
+  async getCsrLicense(id: string): Promise<SelectCsrLicense | null> {
+    return this.csrLicenses.find(c => c.id === id) || null;
+  }
+
+  async getCsrLicensesByPhysician(physicianId: string): Promise<SelectCsrLicense[]> {
+    return this.csrLicenses.filter(c => c.physicianId === physicianId);
+  }
+
+  async getCsrLicenseByState(physicianId: string, state: string): Promise<SelectCsrLicense | null> {
+    return this.csrLicenses.find(c => c.physicianId === physicianId && c.state === state) || null;
+  }
+
+  async updateCsrLicense(id: string, updates: Partial<InsertCsrLicense>): Promise<SelectCsrLicense> {
+    const index = this.csrLicenses.findIndex(c => c.id === id);
+    if (index === -1) throw new Error('CSR license not found');
+    
+    this.csrLicenses[index] = {
+      ...this.csrLicenses[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.csrLicenses[index];
+  }
+
+  async deleteCsrLicense(id: string): Promise<void> {
+    this.csrLicenses = this.csrLicenses.filter(c => c.id !== id);
+  }
+
+  async getExpiringCsrLicenses(days: number): Promise<SelectCsrLicense[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    const today = new Date();
+    
+    return this.csrLicenses.filter(c => {
+      const expireDate = new Date(c.expireDate);
+      return expireDate <= futureDate && expireDate >= today;
+    });
+  }
+
+  // Role Policy operations
+  async createRolePolicy(policy: InsertRolePolicy): Promise<SelectRolePolicy> {
+    const newPolicy: SelectRolePolicy = {
+      id: this.generateId(),
+      role: policy.role,
+      state: policy.state,
+      requiresSupervision: policy.requiresSupervision ?? false,
+      requiresCollaboration: policy.requiresCollaboration ?? false,
+      boardType: policy.boardType,
+      compactEligible: policy.compactEligible ?? false,
+      compactType: policy.compactType ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.rolePolicies.push(newPolicy);
+    return newPolicy;
+  }
+
+  async getRolePolicy(id: string): Promise<SelectRolePolicy | null> {
+    return this.rolePolicies.find(r => r.id === id) || null;
+  }
+
+  async getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null> {
+    return this.rolePolicies.find(r => r.role === role && r.state === state) || null;
+  }
+
+  async getAllRolePolicies(): Promise<SelectRolePolicy[]> {
+    return [...this.rolePolicies];
+  }
+
+  async updateRolePolicy(id: string, updates: Partial<InsertRolePolicy>): Promise<SelectRolePolicy> {
+    const index = this.rolePolicies.findIndex(r => r.id === id);
+    if (index === -1) throw new Error('Role policy not found');
+    
+    this.rolePolicies[index] = {
+      ...this.rolePolicies[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.rolePolicies[index];
+  }
+
+  async deleteRolePolicy(id: string): Promise<void> {
+    this.rolePolicies = this.rolePolicies.filter(r => r.id !== id);
+  }
+
+  // License Document operations
+  async createLicenseDocument(document: InsertLicenseDocument): Promise<SelectLicenseDocument> {
+    // If this is marked as current, update all other documents of the same type for this physician
+    if (document.isCurrent) {
+      this.licenseDocuments.forEach(doc => {
+        if (doc.physicianId === document.physicianId && doc.documentType === document.documentType) {
+          doc.isCurrent = false;
+          doc.updatedAt = new Date();
+        }
+      });
+    }
+    
+    // Calculate version number
+    const existingDocs = this.licenseDocuments.filter(
+      doc => doc.physicianId === document.physicianId && doc.documentType === document.documentType
+    );
+    const maxVersion = existingDocs.reduce((max, doc) => Math.max(max, doc.version || 0), 0);
+    
+    const newDocument: SelectLicenseDocument = {
+      id: this.generateId(),
+      physicianId: document.physicianId,
+      licenseId: document.licenseId ?? null,
+      deaRegistrationId: document.deaRegistrationId ?? null,
+      csrLicenseId: document.csrLicenseId ?? null,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      fileSize: document.fileSize ?? null,
+      version: maxVersion + 1,
+      uploadedBy: document.uploadedBy ?? null,
+      uploadDate: new Date(),
+      isCurrent: document.isCurrent ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.licenseDocuments.push(newDocument);
+    return newDocument;
+  }
+
+  async getLicenseDocument(id: string): Promise<SelectLicenseDocument | null> {
+    return this.licenseDocuments.find(d => d.id === id) || null;
+  }
+
+  async getLicenseDocumentsByPhysician(physicianId: string): Promise<SelectLicenseDocument[]> {
+    return this.licenseDocuments.filter(d => d.physicianId === physicianId);
+  }
+
+  async getLicenseDocumentsByType(physicianId: string, documentType: string): Promise<SelectLicenseDocument[]> {
+    return this.licenseDocuments.filter(
+      d => d.physicianId === physicianId && d.documentType === documentType
+    );
+  }
+
+  async getCurrentLicenseDocuments(physicianId: string): Promise<SelectLicenseDocument[]> {
+    return this.licenseDocuments.filter(
+      d => d.physicianId === physicianId && d.isCurrent === true
+    );
+  }
+
+  async updateLicenseDocument(id: string, updates: Partial<InsertLicenseDocument>): Promise<SelectLicenseDocument> {
+    const index = this.licenseDocuments.findIndex(d => d.id === id);
+    if (index === -1) throw new Error('License document not found');
+    
+    // If updating to current, set all other documents of same type to not current
+    if (updates.isCurrent) {
+      const existingDoc = this.licenseDocuments[index];
+      this.licenseDocuments.forEach((doc, i) => {
+        if (doc.physicianId === existingDoc.physicianId && 
+            doc.documentType === existingDoc.documentType && 
+            i !== index) {
+          doc.isCurrent = false;
+          doc.updatedAt = new Date();
+        }
+      });
+    }
+    
+    this.licenseDocuments[index] = {
+      ...this.licenseDocuments[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.licenseDocuments[index];
+  }
+
+  async deleteLicenseDocument(id: string): Promise<void> {
+    this.licenseDocuments = this.licenseDocuments.filter(d => d.id !== id);
+  }
+
+  async archiveLicenseDocument(id: string): Promise<void> {
+    const index = this.licenseDocuments.findIndex(d => d.id === id);
+    if (index !== -1) {
+      this.licenseDocuments[index].isCurrent = false;
+      this.licenseDocuments[index].updatedAt = new Date();
+    }
+  }
+
   async getPhysicianFullProfile(physicianId: string) {
     return {
       physician: await this.getPhysician(physicianId),
@@ -650,6 +918,9 @@ export class MemoryStorage implements IStorage {
       hospitalAffiliations: await this.getPhysicianHospitalAffiliations(physicianId),
       compliance: await this.getPhysicianComplianceByPhysicianId(physicianId),
       documents: await this.getPhysicianDocuments(physicianId),
+      deaRegistrations: await this.getDeaRegistrationsByPhysician(physicianId),
+      csrLicenses: await this.getCsrLicensesByPhysician(physicianId),
+      licenseDocuments: await this.getLicenseDocumentsByPhysician(physicianId)
     };
   }
 }

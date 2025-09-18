@@ -14,6 +14,15 @@ export const documentTypeEnum = pgEnum('document_type', [
   'malpractice_insurance', 'npdb_report', 'cv', 'immunization_records', 'citizenship_proof'
 ]);
 
+// New enums for telemed licensing platform
+export const licenseStatusEnum = pgEnum('license_status', ['active', 'expired', 'pending_renewal']);
+export const renewalCycleEnum = pgEnum('renewal_cycle', ['annual', 'biennial']);
+export const providerRoleEnum = pgEnum('provider_role', ['physician', 'pa', 'np']);
+export const licenseDocumentTypeEnum = pgEnum('license_document_type', [
+  'license', 'dea_cert', 'csr_cert', 'supervision_agreement', 
+  'collaboration_agreement', 'cme_cert', 'mate_cert'
+]);
+
 // Tables
 
 // Users table for authentication
@@ -101,6 +110,11 @@ export const physicians = pgTable('physicians', {
   tin: text('tin'), // encrypted sensitive data
   deaNumber: text('dea_number'),
   caqhId: text('caqh_id'),
+  
+  // Provider Role Information (NEW)
+  providerRole: providerRoleEnum('provider_role'),
+  supervisingPhysicianId: uuid('supervising_physician_id').references(() => physicians.id),
+  collaborationPhysicianId: uuid('collaboration_physician_id').references(() => physicians.id),
   
   // Contact Information
   homeAddress: text('home_address'), // encrypted sensitive data
@@ -224,6 +238,67 @@ export const physicianDocuments = pgTable('physician_documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// DEA Registrations table
+export const deaRegistrations = pgTable('dea_registrations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  state: text('state').notNull(),
+  deaNumber: text('dea_number').notNull(),
+  issueDate: date('issue_date').notNull(),
+  expireDate: date('expire_date').notNull(),
+  mateAttested: boolean('mate_attested').notNull().default(false),
+  status: licenseStatusEnum('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// CSR Licenses table
+export const csrLicenses = pgTable('csr_licenses', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  state: text('state').notNull(),
+  csrNumber: text('csr_number').notNull(),
+  issueDate: date('issue_date').notNull(),
+  expireDate: date('expire_date').notNull(),
+  renewalCycle: renewalCycleEnum('renewal_cycle').notNull(),
+  status: licenseStatusEnum('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Role Policies table
+export const rolePolicies = pgTable('role_policies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  role: providerRoleEnum('role').notNull(),
+  state: text('state').notNull(),
+  requiresSupervision: boolean('requires_supervision').notNull().default(false),
+  requiresCollaboration: boolean('requires_collaboration').notNull().default(false),
+  boardType: text('board_type').notNull(),
+  compactEligible: boolean('compact_eligible').notNull().default(false),
+  compactType: text('compact_type'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// License Documents table for enhanced document management
+export const licenseDocuments = pgTable('license_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  licenseId: uuid('license_id').references(() => physicianLicenses.id, { onDelete: 'cascade' }),
+  deaRegistrationId: uuid('dea_registration_id').references(() => deaRegistrations.id, { onDelete: 'cascade' }),
+  csrLicenseId: uuid('csr_license_id').references(() => csrLicenses.id, { onDelete: 'cascade' }),
+  documentType: licenseDocumentTypeEnum('document_type').notNull(),
+  fileName: text('file_name').notNull(),
+  fileUrl: text('file_url').notNull(),
+  fileSize: integer('file_size'),
+  version: integer('version').notNull().default(1),
+  uploadedBy: uuid('uploaded_by').references(() => users.id),
+  uploadDate: timestamp('upload_date', { withTimezone: true }).notNull().defaultNow(),
+  isCurrent: boolean('is_current').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 // Insert Schemas and Types
 
 // User schemas and types
@@ -323,3 +398,39 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
 });
 export type InsertUserSettings = typeof userSettings.$inferInsert;
 export type SelectUserSettings = typeof userSettings.$inferSelect;
+
+// DEA Registrations schemas and types
+export const insertDeaRegistrationSchema = createInsertSchema(deaRegistrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertDeaRegistration = typeof deaRegistrations.$inferInsert;
+export type SelectDeaRegistration = typeof deaRegistrations.$inferSelect;
+
+// CSR Licenses schemas and types
+export const insertCsrLicenseSchema = createInsertSchema(csrLicenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertCsrLicense = typeof csrLicenses.$inferInsert;
+export type SelectCsrLicense = typeof csrLicenses.$inferSelect;
+
+// Role Policies schemas and types
+export const insertRolePolicySchema = createInsertSchema(rolePolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertRolePolicy = typeof rolePolicies.$inferInsert;
+export type SelectRolePolicy = typeof rolePolicies.$inferSelect;
+
+// License Documents schemas and types
+export const insertLicenseDocumentSchema = createInsertSchema(licenseDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertLicenseDocument = typeof licenseDocuments.$inferInsert;
+export type SelectLicenseDocument = typeof licenseDocuments.$inferSelect;

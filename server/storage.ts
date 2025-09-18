@@ -12,6 +12,10 @@ import {
   physicianCompliance,
   physicianDocuments,
   userSettings,
+  deaRegistrations,
+  csrLicenses,
+  rolePolicies,
+  licenseDocuments,
   type SelectUser,
   type InsertUser,
   type SelectSession,
@@ -36,6 +40,14 @@ import {
   type InsertPhysicianDocument,
   type SelectUserSettings,
   type InsertUserSettings,
+  type SelectDeaRegistration,
+  type InsertDeaRegistration,
+  type SelectCsrLicense,
+  type InsertCsrLicense,
+  type SelectRolePolicy,
+  type InsertRolePolicy,
+  type SelectLicenseDocument,
+  type InsertLicenseDocument,
 } from '../shared/schema';
 import { MemoryStorage } from './memoryStorage';
 
@@ -165,6 +177,42 @@ export interface IStorage {
   deleteExpiredSessions(): Promise<void>;
   extendSession(sessionToken: string, newExpiresAt: Date): Promise<SelectSession>;
 
+  // DEA Registration operations
+  createDeaRegistration(registration: InsertDeaRegistration): Promise<SelectDeaRegistration>;
+  getDeaRegistration(id: string): Promise<SelectDeaRegistration | null>;
+  getDeaRegistrationsByPhysician(physicianId: string): Promise<SelectDeaRegistration[]>;
+  getDeaRegistrationByState(physicianId: string, state: string): Promise<SelectDeaRegistration | null>;
+  updateDeaRegistration(id: string, updates: Partial<InsertDeaRegistration>): Promise<SelectDeaRegistration>;
+  deleteDeaRegistration(id: string): Promise<void>;
+  getExpiringDeaRegistrations(days: number): Promise<SelectDeaRegistration[]>;
+
+  // CSR License operations
+  createCsrLicense(license: InsertCsrLicense): Promise<SelectCsrLicense>;
+  getCsrLicense(id: string): Promise<SelectCsrLicense | null>;
+  getCsrLicensesByPhysician(physicianId: string): Promise<SelectCsrLicense[]>;
+  getCsrLicenseByState(physicianId: string, state: string): Promise<SelectCsrLicense | null>;
+  updateCsrLicense(id: string, updates: Partial<InsertCsrLicense>): Promise<SelectCsrLicense>;
+  deleteCsrLicense(id: string): Promise<void>;
+  getExpiringCsrLicenses(days: number): Promise<SelectCsrLicense[]>;
+
+  // Role Policy operations
+  createRolePolicy(policy: InsertRolePolicy): Promise<SelectRolePolicy>;
+  getRolePolicy(id: string): Promise<SelectRolePolicy | null>;
+  getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null>;
+  getAllRolePolicies(): Promise<SelectRolePolicy[]>;
+  updateRolePolicy(id: string, updates: Partial<InsertRolePolicy>): Promise<SelectRolePolicy>;
+  deleteRolePolicy(id: string): Promise<void>;
+
+  // License Document operations
+  createLicenseDocument(document: InsertLicenseDocument): Promise<SelectLicenseDocument>;
+  getLicenseDocument(id: string): Promise<SelectLicenseDocument | null>;
+  getLicenseDocumentsByPhysician(physicianId: string): Promise<SelectLicenseDocument[]>;
+  getLicenseDocumentsByType(physicianId: string, documentType: string): Promise<SelectLicenseDocument[]>;
+  getCurrentLicenseDocuments(physicianId: string): Promise<SelectLicenseDocument[]>;
+  updateLicenseDocument(id: string, updates: Partial<InsertLicenseDocument>): Promise<SelectLicenseDocument>;
+  deleteLicenseDocument(id: string): Promise<void>;
+  archiveLicenseDocument(id: string): Promise<void>;
+
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
     physician: SelectPhysician | null;
@@ -175,6 +223,9 @@ export interface IStorage {
     hospitalAffiliations: SelectPhysicianHospitalAffiliation[];
     compliance: SelectPhysicianCompliance | null;
     documents: SelectPhysicianDocument[];
+    deaRegistrations: SelectDeaRegistration[];
+    csrLicenses: SelectCsrLicense[];
+    licenseDocuments: SelectLicenseDocument[];
   }>;
 }
 
@@ -1198,6 +1249,460 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  // DEA Registration operations
+  async createDeaRegistration(registration: InsertDeaRegistration): Promise<SelectDeaRegistration> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(deaRegistrations).values(registration).returning();
+      if (!result) {
+        throw new Error('Failed to create DEA registration');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating DEA registration:', error);
+      throw new Error(`Failed to create DEA registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getDeaRegistration(id: string): Promise<SelectDeaRegistration | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(deaRegistrations).where(eq(deaRegistrations.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting DEA registration:', error);
+      throw new Error(`Failed to get DEA registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getDeaRegistrationsByPhysician(physicianId: string): Promise<SelectDeaRegistration[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(deaRegistrations).where(eq(deaRegistrations.physicianId, physicianId));
+    } catch (error) {
+      console.error('Error getting DEA registrations by physician:', error);
+      throw new Error(`Failed to get DEA registrations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getDeaRegistrationByState(physicianId: string, state: string): Promise<SelectDeaRegistration | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(deaRegistrations)
+        .where(
+          and(
+            eq(deaRegistrations.physicianId, physicianId),
+            eq(deaRegistrations.state, state)
+          )
+        );
+      return result || null;
+    } catch (error) {
+      console.error('Error getting DEA registration by state:', error);
+      throw new Error(`Failed to get DEA registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateDeaRegistration(id: string, updates: Partial<InsertDeaRegistration>): Promise<SelectDeaRegistration> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(deaRegistrations)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(deaRegistrations.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('DEA registration not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating DEA registration:', error);
+      throw new Error(`Failed to update DEA registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteDeaRegistration(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(deaRegistrations).where(eq(deaRegistrations.id, id));
+    } catch (error) {
+      console.error('Error deleting DEA registration:', error);
+      throw new Error(`Failed to delete DEA registration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringDeaRegistrations(days: number): Promise<SelectDeaRegistration[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      return await db
+        .select()
+        .from(deaRegistrations)
+        .where(
+          and(
+            sql`${deaRegistrations.expireDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${deaRegistrations.expireDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+    } catch (error) {
+      console.error('Error getting expiring DEA registrations:', error);
+      throw new Error(`Failed to get expiring DEA registrations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // CSR License operations
+  async createCsrLicense(license: InsertCsrLicense): Promise<SelectCsrLicense> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(csrLicenses).values(license).returning();
+      if (!result) {
+        throw new Error('Failed to create CSR license');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating CSR license:', error);
+      throw new Error(`Failed to create CSR license: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getCsrLicense(id: string): Promise<SelectCsrLicense | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(csrLicenses).where(eq(csrLicenses.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting CSR license:', error);
+      throw new Error(`Failed to get CSR license: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getCsrLicensesByPhysician(physicianId: string): Promise<SelectCsrLicense[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(csrLicenses).where(eq(csrLicenses.physicianId, physicianId));
+    } catch (error) {
+      console.error('Error getting CSR licenses by physician:', error);
+      throw new Error(`Failed to get CSR licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getCsrLicenseByState(physicianId: string, state: string): Promise<SelectCsrLicense | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(csrLicenses)
+        .where(
+          and(
+            eq(csrLicenses.physicianId, physicianId),
+            eq(csrLicenses.state, state)
+          )
+        );
+      return result || null;
+    } catch (error) {
+      console.error('Error getting CSR license by state:', error);
+      throw new Error(`Failed to get CSR license: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateCsrLicense(id: string, updates: Partial<InsertCsrLicense>): Promise<SelectCsrLicense> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(csrLicenses)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(csrLicenses.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('CSR license not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating CSR license:', error);
+      throw new Error(`Failed to update CSR license: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteCsrLicense(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(csrLicenses).where(eq(csrLicenses.id, id));
+    } catch (error) {
+      console.error('Error deleting CSR license:', error);
+      throw new Error(`Failed to delete CSR license: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringCsrLicenses(days: number): Promise<SelectCsrLicense[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      return await db
+        .select()
+        .from(csrLicenses)
+        .where(
+          and(
+            sql`${csrLicenses.expireDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${csrLicenses.expireDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+    } catch (error) {
+      console.error('Error getting expiring CSR licenses:', error);
+      throw new Error(`Failed to get expiring CSR licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Role Policy operations
+  async createRolePolicy(policy: InsertRolePolicy): Promise<SelectRolePolicy> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(rolePolicies).values(policy).returning();
+      if (!result) {
+        throw new Error('Failed to create role policy');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating role policy:', error);
+      throw new Error(`Failed to create role policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getRolePolicy(id: string): Promise<SelectRolePolicy | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(rolePolicies).where(eq(rolePolicies.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting role policy:', error);
+      throw new Error(`Failed to get role policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(rolePolicies)
+        .where(
+          and(
+            eq(rolePolicies.role, role),
+            eq(rolePolicies.state, state)
+          )
+        );
+      return result || null;
+    } catch (error) {
+      console.error('Error getting role policy by role and state:', error);
+      throw new Error(`Failed to get role policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllRolePolicies(): Promise<SelectRolePolicy[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(rolePolicies);
+    } catch (error) {
+      console.error('Error getting all role policies:', error);
+      throw new Error(`Failed to get role policies: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateRolePolicy(id: string, updates: Partial<InsertRolePolicy>): Promise<SelectRolePolicy> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(rolePolicies)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(rolePolicies.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Role policy not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating role policy:', error);
+      throw new Error(`Failed to update role policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteRolePolicy(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(rolePolicies).where(eq(rolePolicies.id, id));
+    } catch (error) {
+      console.error('Error deleting role policy:', error);
+      throw new Error(`Failed to delete role policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // License Document operations
+  async createLicenseDocument(document: InsertLicenseDocument): Promise<SelectLicenseDocument> {
+    try {
+      const db = await this.getDb();
+      
+      // If this is marked as current, update all other documents of the same type for this physician
+      if (document.isCurrent) {
+        await db
+          .update(licenseDocuments)
+          .set({ isCurrent: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(licenseDocuments.physicianId, document.physicianId),
+              eq(licenseDocuments.documentType, document.documentType!)
+            )
+          );
+      }
+      
+      // Calculate version number
+      const existingDocs = await db
+        .select()
+        .from(licenseDocuments)
+        .where(
+          and(
+            eq(licenseDocuments.physicianId, document.physicianId),
+            eq(licenseDocuments.documentType, document.documentType)
+          )
+        );
+      
+      const maxVersion = existingDocs.reduce((max, doc) => Math.max(max, doc.version || 0), 0);
+      const newDocument = { ...document, version: maxVersion + 1 };
+      
+      const [result] = await db.insert(licenseDocuments).values(newDocument).returning();
+      if (!result) {
+        throw new Error('Failed to create license document');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating license document:', error);
+      throw new Error(`Failed to create license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getLicenseDocument(id: string): Promise<SelectLicenseDocument | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(licenseDocuments).where(eq(licenseDocuments.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting license document:', error);
+      throw new Error(`Failed to get license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getLicenseDocumentsByPhysician(physicianId: string): Promise<SelectLicenseDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(licenseDocuments).where(eq(licenseDocuments.physicianId, physicianId));
+    } catch (error) {
+      console.error('Error getting license documents by physician:', error);
+      throw new Error(`Failed to get license documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getLicenseDocumentsByType(physicianId: string, documentType: string): Promise<SelectLicenseDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db
+        .select()
+        .from(licenseDocuments)
+        .where(
+          and(
+            eq(licenseDocuments.physicianId, physicianId),
+            eq(licenseDocuments.documentType, documentType as 'license' | 'dea_cert' | 'csr_cert' | 'supervision_agreement' | 'collaboration_agreement' | 'cme_cert' | 'mate_cert')
+          )
+        );
+    } catch (error) {
+      console.error('Error getting license documents by type:', error);
+      throw new Error(`Failed to get license documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getCurrentLicenseDocuments(physicianId: string): Promise<SelectLicenseDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db
+        .select()
+        .from(licenseDocuments)
+        .where(
+          and(
+            eq(licenseDocuments.physicianId, physicianId),
+            eq(licenseDocuments.isCurrent, true)
+          )
+        );
+    } catch (error) {
+      console.error('Error getting current license documents:', error);
+      throw new Error(`Failed to get current license documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateLicenseDocument(id: string, updates: Partial<InsertLicenseDocument>): Promise<SelectLicenseDocument> {
+    try {
+      const db = await this.getDb();
+      
+      // If updating to current, set all other documents of same type to not current
+      if (updates.isCurrent) {
+        const existingDoc = await this.getLicenseDocument(id);
+        if (existingDoc) {
+          await db
+            .update(licenseDocuments)
+            .set({ isCurrent: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(licenseDocuments.physicianId, existingDoc.physicianId),
+                eq(licenseDocuments.documentType, existingDoc.documentType),
+                sql`${licenseDocuments.id} != ${id}`
+              )
+            );
+        }
+      }
+      
+      const [result] = await db
+        .update(licenseDocuments)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(licenseDocuments.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('License document not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating license document:', error);
+      throw new Error(`Failed to update license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteLicenseDocument(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(licenseDocuments).where(eq(licenseDocuments.id, id));
+    } catch (error) {
+      console.error('Error deleting license document:', error);
+      throw new Error(`Failed to delete license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async archiveLicenseDocument(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(licenseDocuments)
+        .set({ isCurrent: false, updatedAt: new Date() })
+        .where(eq(licenseDocuments.id, id));
+    } catch (error) {
+      console.error('Error archiving license document:', error);
+      throw new Error(`Failed to archive license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Utility operations
   async getPhysicianFullProfile(physicianId: string): Promise<{
     physician: SelectPhysician | null;
@@ -1208,6 +1713,9 @@ export class PostgreSQLStorage implements IStorage {
     hospitalAffiliations: SelectPhysicianHospitalAffiliation[];
     compliance: SelectPhysicianCompliance | null;
     documents: SelectPhysicianDocument[];
+    deaRegistrations: SelectDeaRegistration[];
+    csrLicenses: SelectCsrLicense[];
+    licenseDocuments: SelectLicenseDocument[];
   }> {
     try {
       const [
@@ -1218,7 +1726,10 @@ export class PostgreSQLStorage implements IStorage {
         workHistory,
         hospitalAffiliations,
         compliance,
-        documents
+        documents,
+        deaRegistrations,
+        csrLicenses,
+        licenseDocuments
       ] = await Promise.all([
         this.getPhysician(physicianId),
         this.getPhysicianLicenses(physicianId),
@@ -1227,7 +1738,10 @@ export class PostgreSQLStorage implements IStorage {
         this.getPhysicianWorkHistories(physicianId),
         this.getPhysicianHospitalAffiliations(physicianId),
         this.getPhysicianComplianceByPhysicianId(physicianId),
-        this.getPhysicianDocuments(physicianId)
+        this.getPhysicianDocuments(physicianId),
+        this.getDeaRegistrationsByPhysician(physicianId),
+        this.getCsrLicensesByPhysician(physicianId),
+        this.getLicenseDocumentsByPhysician(physicianId)
       ]);
 
       return {
@@ -1238,7 +1752,10 @@ export class PostgreSQLStorage implements IStorage {
         workHistory,
         hospitalAffiliations,
         compliance,
-        documents
+        documents,
+        deaRegistrations,
+        csrLicenses,
+        licenseDocuments
       };
     } catch (error) {
       console.error('Error getting physician full profile:', error);
