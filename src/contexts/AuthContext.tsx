@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import LockScreen from '@/components/LockScreen';
 import { useSecurityPreferences } from '@/hooks/use-security-preferences';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   username: string;
@@ -18,7 +18,7 @@ interface User {
   lastPasswordChangeAt?: string;
 }
 
-interface Profile {
+export interface Profile {
   id: string;
   userId: string;
   email: string;
