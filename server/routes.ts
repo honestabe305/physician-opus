@@ -1627,6 +1627,164 @@ router.get('/documents/:physicianId/stats', authMiddleware, asyncHandler(async (
   res.json(stats);
 }));
 
+// ============================
+// RENEWAL WORKFLOW ROUTES  
+// ============================
+
+// POST /api/renewal/initiate - Start renewal workflow
+router.post('/renewal/initiate', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { physicianId, entityType, entityId } = req.body;
+  
+  if (!physicianId || !entityType || !entityId) {
+    return res.status(400).json({ error: 'physicianId, entityType, and entityId are required' });
+  }
+  
+  if (!['license', 'dea', 'csr'].includes(entityType)) {
+    return res.status(400).json({ error: 'entityType must be license, dea, or csr' });
+  }
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const workflow = await renewalService.initiateRenewal(physicianId, entityType, entityId, req.user?.id);
+    res.status(201).json(workflow);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/upcoming - Get upcoming renewals
+router.get('/renewal/upcoming', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.query.days as string) || 90;
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const renewals = await renewalService.getUpcomingRenewals(days);
+    res.json(renewals);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/physician/:id - Get all renewals for physician
+router.get('/renewal/physician/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const renewals = await renewalService.getPhysicianRenewals(id);
+    res.json(renewals);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// PUT /api/renewal/:id/status - Update renewal status
+router.put('/renewal/:id/status', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  const { status, rejectionReason } = req.body;
+  
+  if (!status) {
+    return res.status(400).json({ error: 'status is required' });
+  }
+  
+  const validStatuses = ['not_started', 'in_progress', 'filed', 'under_review', 'approved', 'rejected', 'expired'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const workflow = await renewalService.updateRenewalStatus(id, status, rejectionReason, req.user?.id);
+    res.json(workflow);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/:id/timeline - Get renewal timeline
+router.get('/renewal/:id/timeline', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const timeline = await renewalService.getRenewalTimeline(id);
+    res.json(timeline);
+  } catch (error: any) {
+    res.status(404).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/:id/checklist - Get renewal checklist
+router.get('/renewal/:id/checklist', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const workflow = await storage.getRenewalWorkflow(id);
+    if (!workflow) {
+      return res.status(404).json({ error: 'Renewal workflow not found' });
+    }
+    
+    const checklist = workflow.checklist || { items: [], totalItems: 0, completedItems: 0, progressPercentage: 0 };
+    res.json(checklist);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// POST /api/renewal/:id/complete-task - Mark checklist item complete
+router.post('/renewal/:id/complete-task', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  const { taskId, completed } = req.body;
+  
+  if (!taskId || completed === undefined) {
+    return res.status(400).json({ error: 'taskId and completed are required' });
+  }
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const workflow = await renewalService.trackRenewalProgress(id, taskId, completed);
+    res.json(workflow);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/:id/next-actions - Get next required actions
+router.get('/renewal/:id/next-actions', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const actions = await renewalService.calculateNextActions(id);
+    res.json(actions);
+  } catch (error: any) {
+    res.status(404).json({ error: error.message });
+  }
+}));
+
+// GET /api/renewal/statistics - Get renewal statistics
+router.get('/renewal/statistics', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { renewalService } = await import('./services/renewal-service');
+    const stats = await renewalService.getRenewalStatistics();
+    res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// DELETE /api/renewal/:id - Delete renewal workflow
+router.delete('/renewal/:id', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    await storage.deleteRenewalWorkflow(id);
+    res.json({ message: 'Renewal workflow deleted successfully' });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
 // System Information route
 router.get('/system/info', asyncHandler(async (req: any, res: any) => {
   const physicians = await storage.getAllPhysicians();

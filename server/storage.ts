@@ -17,6 +17,7 @@ import {
   rolePolicies,
   licenseDocuments,
   notifications,
+  renewalWorkflows,
   type SelectUser,
   type InsertUser,
   type SelectSession,
@@ -51,6 +52,8 @@ import {
   type InsertLicenseDocument,
   type SelectNotification,
   type InsertNotification,
+  type SelectRenewalWorkflow,
+  type InsertRenewalWorkflow,
 } from '../shared/schema';
 import { MemoryStorage } from './memoryStorage';
 
@@ -230,6 +233,18 @@ export interface IStorage {
   deleteNotification(id: string): Promise<void>;
   deleteOldNotifications(olderThan: Date): Promise<void>;
   getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]>;
+
+  // Renewal Workflow operations
+  createRenewalWorkflow(workflow: InsertRenewalWorkflow): Promise<SelectRenewalWorkflow>;
+  getRenewalWorkflow(id: string): Promise<SelectRenewalWorkflow | null>;
+  getRenewalWorkflowsByPhysician(physicianId: string): Promise<SelectRenewalWorkflow[]>;
+  getRenewalWorkflowsByEntity(entityType: string, entityId: string): Promise<SelectRenewalWorkflow[]>;
+  getActiveRenewalWorkflows(): Promise<SelectRenewalWorkflow[]>;
+  getUpcomingRenewals(days: number): Promise<SelectRenewalWorkflow[]>;
+  updateRenewalWorkflow(id: string, updates: Partial<InsertRenewalWorkflow>): Promise<SelectRenewalWorkflow>;
+  updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow>;
+  updateRenewalProgress(id: string, progress: number, checklist?: any): Promise<SelectRenewalWorkflow>;
+  deleteRenewalWorkflow(id: string): Promise<void>;
 
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
@@ -1718,6 +1733,191 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error archiving license document:', error);
       throw new Error(`Failed to archive license document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Renewal Workflow operations
+  async createRenewalWorkflow(workflow: InsertRenewalWorkflow): Promise<SelectRenewalWorkflow> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(renewalWorkflows).values(workflow).returning();
+      if (!result) {
+        throw new Error('Failed to create renewal workflow');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating renewal workflow:', error);
+      throw new Error(`Failed to create renewal workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getRenewalWorkflow(id: string): Promise<SelectRenewalWorkflow | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(renewalWorkflows).where(eq(renewalWorkflows.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting renewal workflow:', error);
+      throw new Error(`Failed to get renewal workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getRenewalWorkflowsByPhysician(physicianId: string): Promise<SelectRenewalWorkflow[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(renewalWorkflows)
+        .where(eq(renewalWorkflows.physicianId, physicianId))
+        .orderBy(renewalWorkflows.createdAt);
+    } catch (error) {
+      console.error('Error getting renewal workflows by physician:', error);
+      throw new Error(`Failed to get renewal workflows: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getRenewalWorkflowsByEntity(entityType: string, entityId: string): Promise<SelectRenewalWorkflow[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(renewalWorkflows)
+        .where(and(
+          eq(renewalWorkflows.entityType, entityType),
+          eq(renewalWorkflows.entityId, entityId)
+        ))
+        .orderBy(renewalWorkflows.createdAt);
+    } catch (error) {
+      console.error('Error getting renewal workflows by entity:', error);
+      throw new Error(`Failed to get renewal workflows: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getActiveRenewalWorkflows(): Promise<SelectRenewalWorkflow[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(renewalWorkflows)
+        .where(or(
+          eq(renewalWorkflows.renewalStatus, 'in_progress'),
+          eq(renewalWorkflows.renewalStatus, 'filed'),
+          eq(renewalWorkflows.renewalStatus, 'under_review')
+        ))
+        .orderBy(renewalWorkflows.nextActionDueDate);
+    } catch (error) {
+      console.error('Error getting active renewal workflows:', error);
+      throw new Error(`Failed to get active renewal workflows: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUpcomingRenewals(days: number): Promise<SelectRenewalWorkflow[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      return await db.select().from(renewalWorkflows)
+        .where(and(
+          lt(renewalWorkflows.nextActionDueDate, futureDate.toISOString()),
+          or(
+            eq(renewalWorkflows.renewalStatus, 'not_started'),
+            eq(renewalWorkflows.renewalStatus, 'in_progress')
+          )
+        ))
+        .orderBy(renewalWorkflows.nextActionDueDate);
+    } catch (error) {
+      console.error('Error getting upcoming renewals:', error);
+      throw new Error(`Failed to get upcoming renewals: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateRenewalWorkflow(id: string, updates: Partial<InsertRenewalWorkflow>): Promise<SelectRenewalWorkflow> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(renewalWorkflows)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(renewalWorkflows.id, id))
+        .returning();
+      if (!result) {
+        throw new Error('Renewal workflow not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating renewal workflow:', error);
+      throw new Error(`Failed to update renewal workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow> {
+    try {
+      const db = await this.getDb();
+      const statusDate: any = {};
+      
+      // Set appropriate date based on status
+      switch(status) {
+        case 'filed':
+          statusDate.filedDate = new Date();
+          break;
+        case 'approved':
+          statusDate.approvalDate = new Date();
+          break;
+        case 'rejected':
+          statusDate.rejectionDate = new Date();
+          break;
+        case 'in_progress':
+          statusDate.applicationDate = new Date();
+          break;
+      }
+      
+      const [result] = await db
+        .update(renewalWorkflows)
+        .set({ 
+          renewalStatus: status, 
+          ...statusDate,
+          updatedAt: new Date() 
+        })
+        .where(eq(renewalWorkflows.id, id))
+        .returning();
+      if (!result) {
+        throw new Error('Renewal workflow not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating renewal status:', error);
+      throw new Error(`Failed to update renewal status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateRenewalProgress(id: string, progress: number, checklist?: any): Promise<SelectRenewalWorkflow> {
+    try {
+      const db = await this.getDb();
+      const updates: any = {
+        progressPercentage: progress,
+        updatedAt: new Date()
+      };
+      
+      if (checklist !== undefined) {
+        updates.checklist = checklist;
+      }
+      
+      const [result] = await db
+        .update(renewalWorkflows)
+        .set(updates)
+        .where(eq(renewalWorkflows.id, id))
+        .returning();
+      if (!result) {
+        throw new Error('Renewal workflow not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating renewal progress:', error);
+      throw new Error(`Failed to update renewal progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteRenewalWorkflow(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(renewalWorkflows).where(eq(renewalWorkflows.id, id));
+    } catch (error) {
+      console.error('Error deleting renewal workflow:', error);
+      throw new Error(`Failed to delete renewal workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

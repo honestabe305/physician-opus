@@ -28,6 +28,12 @@ export const notificationTypeEnum = pgEnum('notification_type', ['license', 'dea
 export const notificationStatusEnum = pgEnum('notification_status', ['pending', 'sent', 'failed', 'read']);
 export const notificationSeverityEnum = pgEnum('notification_severity', ['info', 'warning', 'critical']);
 
+// Renewal Workflow enums
+export const renewalStatusEnum = pgEnum('renewal_status', [
+  'not_started', 'in_progress', 'filed', 'under_review', 'approved', 'rejected', 'expired'
+]);
+export const renewalEntityTypeEnum = pgEnum('renewal_entity_type', ['license', 'dea', 'csr']);
+
 // Tables
 
 // Users table for authentication
@@ -304,6 +310,35 @@ export const licenseDocuments = pgTable('license_documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// Renewal Workflows table for tracking renewal processes
+export const renewalWorkflows = pgTable('renewal_workflows', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  entityType: renewalEntityTypeEnum('entity_type').notNull(), // license/dea/csr
+  entityId: uuid('entity_id').notNull(), // Reference to the specific license/dea/csr ID
+  renewalStatus: renewalStatusEnum('renewal_status').notNull().default('not_started'),
+  
+  // Important dates
+  applicationDate: timestamp('application_date', { withTimezone: true }),
+  filedDate: timestamp('filed_date', { withTimezone: true }),
+  approvalDate: timestamp('approval_date', { withTimezone: true }),
+  rejectionDate: timestamp('rejection_date', { withTimezone: true }),
+  
+  // Additional fields
+  rejectionReason: text('rejection_reason'),
+  notes: text('notes'),
+  nextActionRequired: text('next_action_required'),
+  nextActionDueDate: date('next_action_due_date'),
+  progressPercentage: integer('progress_percentage').notNull().default(0),
+  checklist: jsonb('checklist'), // JSON object storing task list and completion status
+  
+  // Audit fields
+  createdBy: uuid('created_by').references(() => users.id),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 // Notifications table for expiration tracking
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -468,3 +503,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 export type InsertNotification = typeof notifications.$inferInsert;
 export type SelectNotification = typeof notifications.$inferSelect;
+
+// Renewal Workflows schemas and types
+export const insertRenewalWorkflowSchema = createInsertSchema(renewalWorkflows).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertRenewalWorkflow = typeof renewalWorkflows.$inferInsert;
+export type SelectRenewalWorkflow = typeof renewalWorkflows.$inferSelect;

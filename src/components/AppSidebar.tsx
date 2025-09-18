@@ -10,7 +10,8 @@ import {
   Clock,
   Building2,
   GraduationCap,
-  LogOut
+  LogOut,
+  RefreshCcw
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDisplayName, getInitials, getUserRole, getUserEmail } from "@/lib/user-display-utils";
@@ -50,6 +51,7 @@ const navigation = [
       { title: "Licensure", url: "/licensure", icon: Shield },
       { title: "Education", url: "/education", icon: GraduationCap },
       { title: "Work History", url: "/work-history", icon: Clock },
+      { title: "Renewal Workflows", url: "/renewal-workflows", icon: RefreshCcw },
     ]
   },
   {
