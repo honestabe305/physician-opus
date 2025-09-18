@@ -69,6 +69,35 @@ export class ObjectStorageService {
     return file;
   }
 
+  // Upload a file to object storage
+  async uploadFile(path: string, buffer: Buffer, mimeType: string): Promise<string> {
+    const bucketName = this.getBucketName();
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(path);
+    
+    await file.save(buffer, {
+      contentType: mimeType,
+      resumable: false,
+    });
+    
+    // Return the file path for storage
+    return `gs://${bucketName}/${path}`;
+  }
+
+  // Get a signed URL for downloading a file
+  async getSignedUrl(filePath: string, expiresInSeconds: number = 3600): Promise<string> {
+    const bucketName = this.getBucketName();
+    // Remove the gs:// prefix if present
+    const cleanPath = filePath.replace(`gs://${bucketName}/`, '');
+    
+    return this.signObjectURL({
+      bucketName,
+      objectName: cleanPath,
+      method: "GET",
+      ttlSec: expiresInSeconds,
+    });
+  }
+
   // Downloads a document to the response
   async downloadDocument(file: File, res: Response) {
     try {

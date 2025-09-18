@@ -36,9 +36,14 @@ import {
   CheckCircle,
   XCircle,
   ExternalLink,
+  Upload,
 } from "lucide-react";
 import { Link, useParams, useLocation } from "wouter";
-import type { SelectPhysician, SelectPhysicianEducation, SelectPhysicianWorkHistory, SelectPhysicianDocument, SelectPhysicianLicense, SelectPhysicianCertification } from "../../shared/schema";
+import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
+import { DocumentList } from "@/components/DocumentList";
+import { DocumentHistory } from "@/components/DocumentHistory";
+import { DocumentPreview } from "@/components/DocumentPreview";
+import type { SelectPhysician, SelectPhysicianEducation, SelectPhysicianWorkHistory, SelectPhysicianDocument, SelectPhysicianLicense, SelectPhysicianCertification, SelectLicenseDocument } from "../../shared/schema";
 
 interface PhysicianDetails extends SelectPhysician {
   age?: number;
@@ -48,6 +53,12 @@ export default function PhysicianProfilePage() {
   const { id } = useParams() as { id: string };
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("overview");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<SelectLicenseDocument | null>(null);
+  const [selectedDocumentType, setSelectedDocumentType] = useState<string>("");
+  const [historyDocuments, setHistoryDocuments] = useState<SelectLicenseDocument[]>([]);
 
   // Fetch physician basic information
   const { data: physician, isLoading: isLoadingPhysician, error: physicianError } = useQuery<PhysicianDetails>({
@@ -91,6 +102,13 @@ export default function PhysicianProfilePage() {
     enabled: !!id,
   });
 
+  // Fetch license documents
+  const { data: licenseDocuments = [], isLoading: isLoadingLicenseDocuments } = useQuery<SelectLicenseDocument[]>({
+    queryKey: ['/documents/physician', id],
+    queryFn: () => apiRequest(`/documents/physician/${id}`),
+    enabled: !!id,
+  });
+
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth?: string | null) => {
     if (!dateOfBirth) return null;
@@ -130,6 +148,19 @@ export default function PhysicianProfilePage() {
   const formatPhoneNumbers = (phoneNumbers?: string[] | null) => {
     if (!phoneNumbers || phoneNumbers.length === 0) return 'N/A';
     return phoneNumbers.join(', ');
+  };
+
+  // Document handler functions
+  const handleViewHistory = async (physicianId: string, documentType: string) => {
+    setSelectedDocumentType(documentType);
+    const history = licenseDocuments.filter(doc => doc.documentType === documentType);
+    setHistoryDocuments(history);
+    setHistoryDialogOpen(true);
+  };
+
+  const handlePreview = (document: SelectLicenseDocument) => {
+    setSelectedDocument(document);
+    setPreviewDialogOpen(true);
   };
 
   if (physicianError) {
@@ -288,7 +319,7 @@ export default function PhysicianProfilePage() {
         {/* Main Profile Details */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" data-testid="tab-overview">
                 <User className="h-4 w-4 mr-2" />
                 Overview
@@ -304,6 +335,10 @@ export default function PhysicianProfilePage() {
               <TabsTrigger value="credentials" data-testid="tab-credentials">
                 <Shield className="h-4 w-4 mr-2" />
                 Credentials
+              </TabsTrigger>
+              <TabsTrigger value="documents" data-testid="tab-documents">
+                <FileText className="h-4 w-4 mr-2" />
+                Documents
               </TabsTrigger>
             </TabsList>
 
@@ -661,6 +696,37 @@ export default function PhysicianProfilePage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Documents Tab */}
+            <TabsContent value="documents" className="space-y-6">
+              <Card className="border-border/50 shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        License Documents
+                      </CardTitle>
+                      <CardDescription>
+                        Manage and view all license-related documents with version control
+                      </CardDescription>
+                    </div>
+                    <Button onClick={() => setUploadDialogOpen(true)} data-testid="button-upload-document">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Document
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <DocumentList
+                    documents={licenseDocuments}
+                    loading={isLoadingLicenseDocuments}
+                    onViewHistory={handleViewHistory}
+                    onPreview={handlePreview}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
 
@@ -763,6 +829,27 @@ export default function PhysicianProfilePage() {
           </Card>
         </div>
       </div>
+
+      {/* Document Management Dialogs */}
+      <DocumentUploadDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        physicianId={id}
+      />
+
+      <DocumentHistory
+        open={historyDialogOpen}
+        onOpenChange={setHistoryDialogOpen}
+        documents={historyDocuments}
+        documentType={selectedDocumentType}
+        physicianId={id}
+      />
+
+      <DocumentPreview
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        document={selectedDocument}
+      />
     </div>
   );
 }

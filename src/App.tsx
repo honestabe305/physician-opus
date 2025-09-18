@@ -31,6 +31,7 @@ const DocumentsPage = lazy(() => import("./pages/DocumentsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PhysicianDocumentsPage = lazy(() => import("./pages/PhysicianDocumentsPage"));
+const DocumentManagementPage = lazy(() => import("./pages/DocumentManagementPage"));
 
 
 const App = () => (
@@ -69,6 +70,8 @@ const App = () => (
                               <Route path="/education" component={EducationPage} />
                               <Route path="/work-history" component={WorkHistoryPage} />
                               <Route path="/documents" component={DocumentsPage} />
+                              <Route path="/document-management" component={DocumentManagementPage} />
+                              <Route path="/document-management/:physicianId" component={DocumentManagementPage} />
                               <Route path="/settings" component={SettingsPage} />
                               <Route component={NotFound} />
                             </Switch>

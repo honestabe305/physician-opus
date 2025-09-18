@@ -68,9 +68,20 @@ import {
 } from './validation/license-validation';
 import { NotificationService } from './services/notification-service';
 import { getScheduler } from './services/scheduler';
+import { documentService, type DocumentAuditEntry } from './services/document-service';
+import multer from 'multer';
+import { type SelectLicenseDocument, insertLicenseDocumentSchema } from '../shared/schema';
 
 const router = Router();
 const storage = createStorage();
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
+});
 
 // Rate limiter for login endpoint
 const loginLimiter = rateLimit({
@@ -1494,6 +1505,126 @@ router.post('/notifications/scheduler/start', authMiddleware, adminMiddleware, a
 router.post('/notifications/scheduler/stop', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
   scheduler.stop();
   res.json({ message: 'Notification scheduler stopped' });
+}));
+
+// ============================
+// DOCUMENT MANAGEMENT ROUTES
+// ============================
+
+// POST /api/documents/upload - Upload new document or version
+router.post('/documents/upload', authMiddleware, upload.single('document'), asyncHandler(async (req: any, res: any) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const { physicianId, documentType, licenseId, deaRegistrationId, csrLicenseId } = req.body;
+
+  if (!physicianId || !documentType) {
+    return res.status(400).json({ error: 'physicianId and documentType are required' });
+  }
+
+  try {
+    const document = await documentService.uploadDocument(
+      physicianId,
+      documentType,
+      {
+        filename: req.file.originalname,
+        mimetype: req.file.mimetype,
+        buffer: req.file.buffer
+      },
+      req.user.id,
+      {
+        licenseId,
+        deaRegistrationId,
+        csrLicenseId
+      }
+    );
+
+    res.status(201).json(document);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// GET /api/documents/physician/:id - Get all documents for physician
+router.get('/documents/physician/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  const { current } = req.query;
+
+  let documents: SelectLicenseDocument[];
+  if (current === 'true') {
+    documents = await documentService.getCurrentDocuments(id);
+  } else {
+    documents = await documentService.getPhysicianDocuments(id);
+  }
+
+  res.json(documents);
+}));
+
+// GET /api/documents/:id/history - Get version history
+router.get('/documents/:physicianId/history/:documentType', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { physicianId, documentType } = req.params;
+  
+  const history = await documentService.getDocumentHistory(physicianId, documentType);
+  res.json(history);
+}));
+
+// PUT /api/documents/:id/current - Set current version
+router.put('/documents/:id/current', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const document = await documentService.setCurrentVersion(id, req.user.id);
+    res.json(document);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// DELETE /api/documents/:id - Soft delete/archive document
+router.delete('/documents/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    await documentService.deleteDocument(id, req.user.id);
+    res.json({ message: 'Document archived successfully' });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+}));
+
+// GET /api/documents/:id/download - Download specific document
+router.get('/documents/:id/download', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  
+  try {
+    const downloadUrl = await documentService.getDocumentDownloadUrl(id);
+    res.json({ downloadUrl });
+  } catch (error: any) {
+    res.status(404).json({ error: error.message });
+  }
+}));
+
+// GET /api/documents/audit-trail - Get audit trail
+router.get('/documents/audit-trail', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { documentId, physicianId, startDate, endDate } = req.query;
+  
+  const options: any = {};
+  if (documentId) options.documentId = documentId as string;
+  if (physicianId) options.physicianId = physicianId as string;
+  if (startDate) options.startDate = new Date(startDate as string);
+  if (endDate) options.endDate = new Date(endDate as string);
+  
+  const auditTrail = await documentService.getAuditTrail(options);
+  res.json(auditTrail);
+}));
+
+// GET /api/documents/:physicianId/stats - Get document statistics
+router.get('/documents/:physicianId/stats', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { physicianId } = req.params;
+  
+  const stats = await documentService.getDocumentStats(physicianId);
+  res.json(stats);
 }));
 
 // System Information route

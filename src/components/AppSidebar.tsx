@@ -56,6 +56,7 @@ const navigation = [
     title: "System",
     items: [
       { title: "Documents", url: "/documents", icon: FileText },
+      { title: "Document Management", url: "/document-management", icon: Shield },
       { title: "Settings", url: "/settings", icon: Settings },
     ]
   }
