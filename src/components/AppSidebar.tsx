@@ -37,6 +37,7 @@ const navigation = [
     title: "Overview",
     items: [
       { title: "Dashboard", url: "/", icon: BarChart3 },
+      { title: "Analytics", url: "/analytics", icon: BarChart3 },
       { title: "All Physicians", url: "/physicians", icon: Users },
       { title: "Add Physician", url: "/physicians/new", icon: UserPlus },
       { title: "Search", url: "/search", icon: Search },

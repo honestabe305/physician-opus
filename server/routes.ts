@@ -69,6 +69,7 @@ import {
 import { NotificationService } from './services/notification-service';
 import { getScheduler } from './services/scheduler';
 import { documentService, type DocumentAuditEntry } from './services/document-service';
+import { analyticsService } from './services/analytics-service';
 import multer from 'multer';
 import { type SelectLicenseDocument, insertLicenseDocumentSchema } from '../shared/schema';
 
@@ -107,8 +108,144 @@ const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {
 };
 
 // ============================
-// AUTHENTICATION ROUTES (No auth required except where specified)
+// ANALYTICS ROUTES (Authentication required)
 // ============================
+
+// GET /api/analytics/compliance - Overall compliance rates
+router.get('/analytics/compliance', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const complianceData = await analyticsService.getComplianceRates();
+    res.json(complianceData);
+  } catch (error) {
+    console.error('Error fetching compliance rates:', error);
+    res.status(500).json({ error: 'Failed to fetch compliance rates' });
+  }
+}));
+
+// GET /api/analytics/renewal-trends - Renewal trend data
+router.get('/analytics/renewal-trends', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const trends = await analyticsService.getRenewalTrends();
+    res.json(trends);
+  } catch (error) {
+    console.error('Error fetching renewal trends:', error);
+    res.status(500).json({ error: 'Failed to fetch renewal trends' });
+  }
+}));
+
+// GET /api/analytics/expiration-forecast - Upcoming expiration predictions
+router.get('/analytics/expiration-forecast', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const forecast = await analyticsService.getExpirationForecast();
+    res.json(forecast);
+  } catch (error) {
+    console.error('Error fetching expiration forecast:', error);
+    res.status(500).json({ error: 'Failed to fetch expiration forecast' });
+  }
+}));
+
+// GET /api/analytics/license-distribution - License distribution stats
+router.get('/analytics/license-distribution', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const distribution = await analyticsService.getLicenseDistribution();
+    res.json(distribution);
+  } catch (error) {
+    console.error('Error fetching license distribution:', error);
+    res.status(500).json({ error: 'Failed to fetch license distribution' });
+  }
+}));
+
+// GET /api/analytics/provider-metrics - Provider role metrics
+router.get('/analytics/provider-metrics', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getProviderMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching provider metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch provider metrics' });
+  }
+}));
+
+// GET /api/analytics/dea-metrics - DEA specific analytics
+router.get('/analytics/dea-metrics', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getDEAMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching DEA metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch DEA metrics' });
+  }
+}));
+
+// GET /api/analytics/csr-metrics - CSR specific analytics  
+router.get('/analytics/csr-metrics', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getCSRMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching CSR metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch CSR metrics' });
+  }
+}));
+
+// GET /api/analytics/document-completeness - Document upload compliance
+router.get('/analytics/document-completeness', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const completeness = await analyticsService.getDocumentCompleteness();
+    res.json(completeness);
+  } catch (error) {
+    console.error('Error fetching document completeness:', error);
+    res.status(500).json({ error: 'Failed to fetch document completeness' });
+  }
+}));
+
+// GET /api/analytics/department/:dept/compliance - Department-specific compliance
+router.get('/analytics/department/:dept/compliance', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { dept } = req.params;
+    const compliance = await analyticsService.getDepartmentCompliance(dept);
+    res.json(compliance);
+  } catch (error) {
+    console.error('Error fetching department compliance:', error);
+    res.status(500).json({ error: 'Failed to fetch department compliance' });
+  }
+}));
+
+// GET /api/analytics/report - Generate comprehensive compliance report
+router.get('/analytics/report', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const report = await analyticsService.generateComplianceReport();
+    res.json(report);
+  } catch (error) {
+    console.error('Error generating compliance report:', error);
+    res.status(500).json({ error: 'Failed to generate compliance report' });
+  }
+}));
+
+// GET /api/analytics/export - Export analytics data
+router.get('/analytics/export', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const format = req.query.format as 'csv' | 'json' || 'json';
+    const data = await analyticsService.exportAnalyticsData(format);
+    
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=analytics-report.csv');
+    } else {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename=analytics-report.json');
+    }
+    
+    res.send(data);
+  } catch (error) {
+    console.error('Error exporting analytics data:', error);
+    res.status(500).json({ error: 'Failed to export analytics data' });
+  }
+}));
+
+// ============================
+// AUTHENTICATION ROUTES (No auth required except where specified)
+// ==============================
 
 // POST /api/auth/register - Create new user (admin-only)
 router.post('/auth/register', authMiddleware, adminMiddleware, registerLimiter, asyncHandler(async (req: any, res: any) => {
