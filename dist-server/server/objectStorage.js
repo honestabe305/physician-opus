@@ -33,9 +33,10 @@ exports.ObjectNotFoundError = ObjectNotFoundError;
 // The object storage service for PhysicianCRM documents
 class ObjectStorageService {
     constructor() { }
-    // Gets the PhysicianCRM bucket name
+    // Gets the bucket name from environment or default
     getBucketName() {
-        return "PhysicianCRM"; // The bucket you created
+        // Try to get from environment variable first, then fall back to a default
+        return process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID || "replit-objstore-default";
     }
     // Gets the upload URL for a physician document
     async getDocumentUploadURL(physicianId) {
