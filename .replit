@@ -12,6 +12,10 @@ externalPort = 80
 localPort = 5001
 externalPort = 3000
 
+[[ports]]
+localPort = 45699
+externalPort = 3002
+
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
@@ -20,6 +24,7 @@ ignorePorts = true
 
 [agent]
 expertMode = true
+integrations = ["javascript_object_storage:1.0.0"]
 
 [workflows]
 runButton = "Project"

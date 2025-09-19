@@ -1742,6 +1742,22 @@ router.get('/documents/:id/download', authMiddleware, asyncHandler(async (req: a
   }
 }));
 
+// GET /api/documents/download/local/:physicianId/:folder/:documentId - Download local file (fallback storage)
+router.get('/documents/download/local/:physicianId/:folder/:documentId', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  const { physicianId, folder, documentId } = req.params;
+  const filePath = `${physicianId}/${folder}/${documentId}`;
+  
+  try {
+    const objectStorageService = new ObjectStorageService();
+    const localFilePath = `local://${filePath}`;
+    const file = await objectStorageService.getDocumentFile(localFilePath);
+    await objectStorageService.downloadDocument(file, res);
+  } catch (error: any) {
+    console.error('Error downloading local file:', error);
+    res.status(404).json({ error: 'File not found' });
+  }
+}));
+
 // GET /api/documents/audit-trail - Get audit trail
 router.get('/documents/audit-trail', authMiddleware, asyncHandler(async (req: any, res: any) => {
   const { documentId, physicianId, startDate, endDate } = req.query;
