@@ -37,13 +37,14 @@ export class ObjectStorageService {
 
   // Gets the bucket name from environment or default
   getBucketName(): string {
-    // Try to get from environment variable first, then fall back to a default
-    return process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID || "replit-objstore-default";
+    // Use the bucket ID from .replit file via environment variable
+    return process.env.REPLIT_OBJECT_STORAGE_BUCKET_ID || "replit-objstore-eff1b6bc-faa1-48ef-ba40-694ef25d01d6";
   }
 
   // Gets the upload URL for a physician document
   async getDocumentUploadURL(physicianId: string): Promise<string> {
     const bucketName = this.getBucketName();
+    console.log('Using bucket name:', bucketName);
     const documentId = randomUUID();
     const objectName = `physicians/${physicianId}/documents/${documentId}`;
 
@@ -165,6 +166,8 @@ export class ObjectStorageService {
       expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
     };
     
+    console.log('Signing URL with request:', request);
+    
     const response = await fetch(
       `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
       {
@@ -177,9 +180,11 @@ export class ObjectStorageService {
     );
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Object storage error:', response.status, errorText);
       throw new Error(
         `Failed to sign object URL, error code: ${response.status}. ` +
-        `Make sure you're running on Replit and have object storage configured.`
+        `Error: ${errorText}. Make sure you're running on Replit and have object storage configured.`
       );
     }
 
