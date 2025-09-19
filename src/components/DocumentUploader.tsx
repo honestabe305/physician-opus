@@ -89,44 +89,68 @@ export function DocumentUploader({ physicianId, onUploadComplete }: DocumentUplo
         method: 'POST'
       });
 
-      // Step 2: Upload file directly to object storage
       setUploadProgress(25);
-      
-      const uploadResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: selectedFile,
-        headers: {
-          'Content-Type': selectedFile.type || 'application/octet-stream'
-        }
-      });
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+      // Check if this is a local storage upload (fallback) or cloud storage
+      if (uploadURL.startsWith('local://')) {
+        // Local storage fallback - upload through backend API
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('physicianId', physicianId);
+        formData.append('documentType', documentType);
+
+        setUploadProgress(50);
+
+        const uploadResponse = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to upload file');
+        }
+
+        setUploadProgress(100);
+        setUploadComplete(true);
+      } else {
+        // Cloud storage - upload directly to signed URL
+        const uploadResponse = await fetch(uploadURL, {
+          method: 'PUT',
+          body: selectedFile,
+          headers: {
+            'Content-Type': selectedFile.type || 'application/octet-stream'
+          }
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload file');
+        }
+
+        setUploadProgress(75);
+
+        // Step 3: Create document record in database
+        const objectPath = new URL(uploadURL).pathname.split('/').slice(2).join('/');
+        
+        await apiRequest('/documents', {
+          method: 'POST',
+          body: JSON.stringify({
+            physicianId,
+            documentType,
+            fileName: selectedFile.name,
+            filePath: objectPath,
+            fileSize: selectedFile.size,
+            mimeType: selectedFile.type || 'application/octet-stream',
+            isSensitive: true
+          }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        setUploadProgress(100);
+        setUploadComplete(true);
       }
-
-      setUploadProgress(75);
-
-      // Step 3: Create document record in database
-      const objectPath = new URL(uploadURL).pathname.split('/').slice(2).join('/');
-      
-      await apiRequest('/documents', {
-        method: 'POST',
-        body: JSON.stringify({
-          physicianId,
-          documentType,
-          fileName: selectedFile.name,
-          filePath: objectPath,
-          fileSize: selectedFile.size,
-          mimeType: selectedFile.type || 'application/octet-stream',
-          isSensitive: true
-        }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      setUploadProgress(100);
-      setUploadComplete(true);
       
       toast({
         title: "Upload Successful",
