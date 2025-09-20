@@ -171,7 +171,7 @@ export default function SettingsPage() {
     generateBackupCodes,
     getPasswordRequirements
   } = useSecurityPreferences();
-  const { user, profile } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   
   // Utility functions for phone formatting
   const formatPhone = (phone: string): string => {
@@ -370,27 +370,49 @@ export default function SettingsPage() {
     }
   }, [userSettings, theme, preferencesForm, dataForm, securityForm]);
 
-  // Save handlers
-  const handleSaveUserProfile = async (data: UserProfileFormData) => {
-    setIsSaving(true);
-    try {
-      // Format phone numbers before saving
-      const formattedData = {
-        ...data,
-        phone: data.phone ? formatPhone(data.phone) : data.phone,
-        mobile: data.mobile ? formatPhone(data.mobile) : data.mobile,
-        emergencyContactPhone: data.emergencyContactPhone ? formatPhone(data.emergencyContactPhone) : data.emergencyContactPhone
-      };
-      
-      // Note: In a real implementation, this would update the profile via AuthContext
-      // For now, we'll show a success message since the backend integration is incomplete
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { fullName: string; email: string; role: string }) => {
+      if (!profile?.id) {
+        throw new Error('Profile not found');
+      }
+      return apiRequest(`/profiles/${profile.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (updatedProfile) => {
+      // Update the profile in AuthContext to keep UI consistent
+      if (updatedProfile && updateProfile) {
+        updateProfile(updatedProfile);
+      }
+      // Invalidate profile-related queries
+      queryClient.invalidateQueries({ queryKey: ['/profiles'] });
       toast({
         title: "Profile updated",
         description: "Your profile has been saved successfully."
       });
-    } finally {
-      setIsSaving(false);
+    },
+    onError: (error) => {
+      console.error('Profile update error:', error);
+      toast({
+        title: "Save failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
     }
+  });
+
+  // Save handlers
+  const handleSaveUserProfile = (data: UserProfileFormData) => {
+    // Only send fields that exist in the database schema
+    const profileUpdateData = {
+      fullName: data.fullName,
+      email: data.email,
+      role: data.role || profile?.role || 'staff'
+    };
+    
+    updateProfileMutation.mutate(profileUpdateData);
   };
 
   const handleSavePreferences = async (data: AppPreferences) => {
@@ -1039,8 +1061,8 @@ export default function SettingsPage() {
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Reset to Default
                   </Button>
-                  <Button type="submit" disabled={isSaving} data-testid="button-save-profile">
-                    {isSaving ? (
+                  <Button type="submit" disabled={updateProfileMutation.isPending} data-testid="button-save-profile">
+                    {updateProfileMutation.isPending ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                         Saving...
