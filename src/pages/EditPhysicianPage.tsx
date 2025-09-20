@@ -474,6 +474,7 @@ export default function EditPhysicianPage() {
               variant="outline"
               onClick={handleCancel}
               disabled={updatePhysicianMutation.isPending}
+              data-testid="button-cancel"
             >
               Cancel
             </Button>
@@ -481,6 +482,7 @@ export default function EditPhysicianPage() {
               type="submit"
               disabled={updatePhysicianMutation.isPending}
               className="gap-2"
+              data-testid="button-save-changes"
             >
               <Save className="h-4 w-4" />
               {updatePhysicianMutation.isPending ? "Saving..." : "Save Changes"}
