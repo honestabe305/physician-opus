@@ -41,7 +41,7 @@ import type { SelectPhysician } from "../../shared/schema";
 const editPhysicianSchema = z.object({
   fullLegalName: z.string().min(2, "Full name must be at least 2 characters"),
   npi: z.string().min(10, "NPI must be at least 10 characters").max(10, "NPI must be exactly 10 characters"),
-  emailAddress: z.string().email("Invalid email address").optional().or(z.literal("")),
+  emailAddress: z.string().email("Invalid email address").or(z.literal("")),
   phoneNumbers: z.string().optional(),
   mailingAddress: z.string().optional(),
   dateOfBirth: z.string().optional(),
@@ -260,7 +260,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Full Legal Name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter full legal name" />
+                        <Input {...field} placeholder="Enter full legal name" data-testid="input-full-legal-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -273,7 +273,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>NPI *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter 10-digit NPI" maxLength={10} />
+                        <Input {...field} placeholder="Enter 10-digit NPI" maxLength={10} data-testid="input-npi" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -288,7 +288,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Date of Birth</FormLabel>
                       <FormControl>
-                        <Input {...field} type="date" />
+                        <Input {...field} type="date" data-testid="input-date-of-birth" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -302,7 +302,7 @@ export default function EditPhysicianPage() {
                       <FormLabel>Gender</FormLabel>
                       <FormControl>
                         <Select value={field.value || ""} onValueChange={field.onChange}>
-                          <SelectTrigger>
+                          <SelectTrigger data-testid="select-gender">
                             <SelectValue placeholder="Select gender" />
                           </SelectTrigger>
                           <SelectContent>
@@ -327,7 +327,7 @@ export default function EditPhysicianPage() {
                     <FormLabel>Status</FormLabel>
                     <FormControl>
                       <Select value={field.value || "active"} onValueChange={field.onChange}>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-status">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -362,7 +362,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input {...field} type="email" placeholder="Enter email address" />
+                        <Input {...field} type="email" placeholder="Enter email address" data-testid="input-email-address" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -375,7 +375,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Phone Numbers</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter phone numbers (comma-separated)" />
+                        <Input {...field} placeholder="Enter phone numbers (comma-separated)" data-testid="input-phone-numbers" />
                       </FormControl>
                       <FormDescription>
                         Separate multiple phone numbers with commas
@@ -392,7 +392,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Mailing Address</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter mailing address" rows={3} />
+                      <Textarea {...field} placeholder="Enter mailing address" rows={3} data-testid="textarea-mailing-address" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -418,7 +418,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Practice Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter practice name" />
+                        <Input {...field} placeholder="Enter practice name" data-testid="input-practice-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -431,7 +431,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Office Phone</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter office phone" />
+                        <Input {...field} placeholder="Enter office phone" data-testid="input-office-phone" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -445,7 +445,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Primary Practice Address</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter primary practice address" rows={3} />
+                      <Textarea {...field} placeholder="Enter primary practice address" rows={3} data-testid="textarea-primary-practice-address" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -458,7 +458,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Group NPI</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Enter group NPI (optional)" />
+                      <Input {...field} placeholder="Enter group NPI (optional)" data-testid="input-group-npi" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

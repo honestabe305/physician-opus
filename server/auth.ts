@@ -129,48 +129,9 @@ export function validatePasswordComplexity(password: string): { valid: boolean; 
 /**
  * Authentication middleware
  * Verifies the session token from cookie or Authorization header
- * BYPASS: Set BYPASS_AUTH=true environment variable to disable authentication for UAT testing
  */
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
-    // 🚧 TEMPORARY UAT BYPASS - Remove for production
-    if (process.env.BYPASS_AUTH === 'true') {
-      console.log('🚧 AUTH BYPASS ENABLED - UAT Testing Mode');
-      
-      // Mock authenticated user for testing
-      const mockUser = {
-        id: 'bypass-user-id',
-        email: 'uat@physiciancrm.com',
-        username: 'uat-tester',
-        role: 'admin',
-        isActive: true,
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        lastLoginAt: new Date().toISOString(),
-        lastPasswordChangeAt: null,
-        twoFactorEnabled: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      const mockSession = {
-        id: 'bypass-session-id',
-        userId: 'bypass-user-id',
-        sessionToken: 'bypass-token',
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-        ipAddress: 'bypass',
-        userAgent: 'bypass',
-        createdAt: new Date().toISOString()
-      };
-      
-      // Attach mock user and session to request
-      req.user = mockUser as any;
-      req.session = mockSession as any;
-      req.sessionToken = 'bypass-token';
-      
-      return next();
-    }
-    // 🚧 END BYPASS CODE
     let jwtToken: string | undefined;
     
     // Check for token in cookie first (the cookie value is the JWT token)
