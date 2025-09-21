@@ -46,32 +46,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { insertPhysicianSchema, type InsertPhysician } from "../../shared/schema";
 import { z } from "zod";
 
-// Create a form schema based on the physician insert type but with string fields for arrays
-const physicianFormSchema = z.object({
-  fullLegalName: z.string(),
-  dateOfBirth: z.string().optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
-  clinicianType: z.enum([
-    'md', 'do', 'pa', 'np', 'cnm', 'crna', 'cns', 'rn', 'lpn', 'lvn', 
-    'cna', 'na', 'ma', 'admin_staff', 'receptionist', 'billing_specialist',
-    'medical_technician', 'lab_technician', 'radiology_tech', 'pharmacist', 'dentist',
-    'optometrist', 'podiatrist', 'chiropractor', 'physical_therapist', 'occupational_therapist',
-    'speech_language_pathologist', 'respiratory_therapist', 'paramedic', 'emt',
-    'radiation_therapist', 'sonographer', 'dietitian', 'social_worker', 'case_manager', 'other'
-  ]).optional(),
-  ssn: z.string().optional(),
-  npi: z.string().optional(),
-  tin: z.string().optional(),
-  deaNumber: z.string().optional(),
-  caqhId: z.string().optional(),
-  homeAddress: z.string().optional(),
-  mailingAddress: z.string().optional(),
-  phoneNumbers: z.string().optional(), // String in form, will convert to array for API
-  emailAddress: z.string().optional(),
-  emergencyContact: z.any().optional(),
-  practiceName: z.string().optional(),
-  primaryPracticeAddress: z.string().optional(),
-  secondaryPracticeAddresses: z.string().optional(), // String in form, will convert to array for API
+// Create a form schema based on the shared physician insert schema but with string fields for arrays
+const physicianFormSchema = insertPhysicianSchema.extend({
+  // Override array fields to be strings in the form (will convert to arrays for API)
+  phoneNumbers: z.string().optional(),
+  secondaryPracticeAddresses: z.string().optional(),
   officePhone: z.string().optional(),
   officeFax: z.string().optional(),
   officeContactPerson: z.string().optional(),
