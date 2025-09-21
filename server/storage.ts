@@ -3,6 +3,7 @@ import {
   users,
   sessions,
   profiles,
+  practices,
   physicians,
   physicianLicenses,
   physicianCertifications,
@@ -24,6 +25,8 @@ import {
   type InsertSession,
   type SelectProfile,
   type InsertProfile,
+  type SelectPractice,
+  type InsertPractice,
   type SelectPhysician,
   type InsertPhysician,
   type SelectPhysicianLicense,
@@ -89,6 +92,17 @@ export interface IStorage {
   updateProfile(id: string, updates: Partial<InsertProfile>): Promise<SelectProfile>;
   deleteProfile(id: string): Promise<void>;
   getAllProfiles(): Promise<SelectProfile[]>;
+
+  // Practice operations
+  createPractice(practice: InsertPractice): Promise<SelectPractice>;
+  getPractice(id: string): Promise<SelectPractice | null>;
+  getPracticeByName(name: string): Promise<SelectPractice | null>;
+  getPracticeByNpi(npi: string): Promise<SelectPractice | null>;
+  updatePractice(id: string, updates: Partial<InsertPractice>): Promise<SelectPractice>;
+  deletePractice(id: string): Promise<void>;
+  getAllPractices(): Promise<SelectPractice[]>;
+  searchPractices(query: string): Promise<SelectPractice[]>;
+  getPhysiciansByPractice(practiceId: string): Promise<SelectPhysician[]>;
 
   // Physician operations
   createPhysician(physician: InsertPhysician): Promise<SelectPhysician>;
@@ -347,6 +361,125 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error getting all profiles:', error);
       throw new Error(`Failed to get profiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Practice operations
+  async createPractice(practice: InsertPractice): Promise<SelectPractice> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(practices).values(practice).returning();
+      if (!result) {
+        throw new Error('Failed to create practice');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating practice:', error);
+      throw new Error(`Failed to create practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPractice(id: string): Promise<SelectPractice | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(practices).where(eq(practices.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting practice:', error);
+      throw new Error(`Failed to get practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeByName(name: string): Promise<SelectPractice | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(practices).where(eq(practices.name, name));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting practice by name:', error);
+      throw new Error(`Failed to get practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeByNpi(npi: string): Promise<SelectPractice | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(practices).where(eq(practices.npi, npi));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting practice by NPI:', error);
+      throw new Error(`Failed to get practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updatePractice(id: string, updates: Partial<InsertPractice>): Promise<SelectPractice> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(practices)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(practices.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Practice not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating practice:', error);
+      throw new Error(`Failed to update practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deletePractice(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(practices).where(eq(practices.id, id));
+    } catch (error) {
+      console.error('Error deleting practice:', error);
+      throw new Error(`Failed to delete practice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPractices(): Promise<SelectPractice[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practices).where(eq(practices.isActive, true));
+    } catch (error) {
+      console.error('Error getting all practices:', error);
+      throw new Error(`Failed to get practices: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPractices(query: string): Promise<SelectPractice[]> {
+    try {
+      const db = await this.getDb();
+      return await db
+        .select()
+        .from(practices)
+        .where(
+          and(
+            eq(practices.isActive, true),
+            or(
+              ilike(practices.name, `%${query}%`),
+              ilike(practices.specialty, `%${query}%`),
+              ilike(practices.primaryAddress, `%${query}%`)
+            )
+          )
+        );
+    } catch (error) {
+      console.error('Error searching practices:', error);
+      throw new Error(`Failed to search practices: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysiciansByPractice(practiceId: string): Promise<SelectPhysician[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(physicians).where(eq(physicians.practiceId, practiceId));
+    } catch (error) {
+      console.error('Error getting physicians by practice:', error);
+      throw new Error(`Failed to get physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
