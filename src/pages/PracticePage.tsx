@@ -108,13 +108,11 @@ export default function PracticePage() {
     const today = new Date();
 
     physicians.forEach((physician: SelectPhysician) => {
-      if (physician.practiceName || physician.primaryPracticeAddress) {
+      if (physician.practiceId) {
         withPracticeInfo++;
-        if (physician.practiceName) {
-          uniquePracticesSet.add(physician.practiceName);
-        }
+        uniquePracticesSet.add(physician.practiceId);
       }
-      if (physician.groupNpi) withGroupNPI++;
+      // Note: groupNpi field doesn't exist on physicians table
       if (physician.malpracticeCarrier || physician.malpracticePolicyNumber) {
         withMalpractice++;
         if (physician.malpracticeExpirationDate) {
@@ -139,12 +137,12 @@ export default function PracticePage() {
     };
   }, [physicians]);
 
-  // Get unique practice names for filter
-  const uniquePracticeNames = useMemo(() => {
+  // Get unique practice IDs for filter (practice names are in separate table)
+  const uniquePracticeIds = useMemo(() => {
     const practices = new Set<string>();
     physicians.forEach((physician: SelectPhysician) => {
-      if (physician.practiceName) {
-        practices.add(physician.practiceName);
+      if (physician.practiceId) {
+        practices.add(physician.practiceId);
       }
     });
     return Array.from(practices).sort();
@@ -155,8 +153,8 @@ export default function PracticePage() {
     return physicians.filter((physician: SelectPhysician) => {
       // Apply practice filter
       if (practiceFilter !== "all") {
-        if (practiceFilter === "no-practice" && physician.practiceName) return false;
-        if (practiceFilter !== "no-practice" && physician.practiceName !== practiceFilter) return false;
+        if (practiceFilter === "no-practice" && physician.practiceId) return false;
+        if (practiceFilter !== "no-practice" && physician.practiceId !== practiceFilter) return false;
       }
 
       // Apply insurance filter
@@ -184,7 +182,7 @@ export default function PracticePage() {
 
     const grouped: Record<string, SelectPhysician[]> = {};
     filteredPhysicians.forEach((physician: SelectPhysician) => {
-      const practice = physician.practiceName || 'No Practice Listed';
+      const practice = physician.practiceId || 'No Practice Listed';
       if (!grouped[practice]) {
         grouped[practice] = [];
       }
@@ -258,7 +256,7 @@ export default function PracticePage() {
   const stats = [
     {
       title: "Total Physicians",
-      value: isLoading ? "..." : practiceStats.withPracticeInfo.toString(),
+      value: isLoading ? "..." : practiceStats.total.toString(),
       change: "with practice info",
       icon: UserCheck,
       description: "Have practice details",
@@ -275,9 +273,9 @@ export default function PracticePage() {
       bgColor: "bg-purple-50 dark:bg-purple-950/20",
     },
     {
-      title: "Group Affiliations",
-      value: isLoading ? "..." : practiceStats.withGroupNPI.toString(),
-      change: `${practiceStats.total ? Math.round(practiceStats.withGroupNPI / practiceStats.total * 100) : 0}%`,
+      title: "Group NPI (N/A)",
+      value: "0",
+      change: "0%",
       icon: Users,
       description: "Have Group NPI",
       color: "text-green-500",
@@ -390,7 +388,7 @@ export default function PracticePage() {
               <SelectContent>
                 <SelectItem value="all">All Practices</SelectItem>
                 <SelectItem value="no-practice">No Practice Listed</SelectItem>
-                {uniquePracticeNames.map((practice) => (
+                {uniquePracticeIds.map((practice) => (
                   <SelectItem key={practice} value={practice}>
                     {practice}
                   </SelectItem>
@@ -493,51 +491,31 @@ export default function PracticePage() {
                                     </Button>
                                   </Link>
                                 </TableCell>
-                                <TableCell>{physician.practiceName || 'N/A'}</TableCell>
+                                <TableCell>{physician.practiceId ? 'Practice Assigned' : 'N/A'}</TableCell>
                                 <TableCell>
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span className="cursor-help">
-                                          {formatAddress(physician.primaryPracticeAddress)}
+                                          {physician.practiceId ? 'Practice Address Available' : 'N/A'}
                                         </span>
                                       </TooltipTrigger>
-                                      {physician.primaryPracticeAddress && (
+                                      {physician.practiceId && (
                                         <TooltipContent>
-                                          <p className="max-w-xs whitespace-pre-wrap">{physician.primaryPracticeAddress}</p>
+                                          <p className="max-w-xs whitespace-pre-wrap">Practice address stored in separate table</p>
                                         </TooltipContent>
                                       )}
                                     </Tooltip>
                                   </TooltipProvider>
                                 </TableCell>
                                 <TableCell>
-                                  {physician.officePhone ? (
-                                    <div className="flex items-center gap-1">
-                                      <Phone className="h-3 w-3 text-muted-foreground" />
-                                      {formatPhoneNumber(physician.officePhone)}
-                                    </div>
-                                  ) : (
-                                    'N/A'
-                                  )}
+                                  {'N/A'}
                                 </TableCell>
                                 <TableCell>
-                                  {physician.officeFax ? (
-                                    <div className="flex items-center gap-1">
-                                      <Printer className="h-3 w-3 text-muted-foreground" />
-                                      {formatPhoneNumber(physician.officeFax)}
-                                    </div>
-                                  ) : (
-                                    'N/A'
-                                  )}
+                                  {'N/A'}
                                 </TableCell>
                                 <TableCell>
-                                  {physician.groupNpi ? (
-                                    <Badge variant="outline" className="font-mono">
-                                      {physician.groupNpi}
-                                    </Badge>
-                                  ) : (
-                                    'N/A'
-                                  )}
+                                  {'N/A'}
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
@@ -572,17 +550,17 @@ export default function PracticePage() {
                                               <div className="space-y-1 text-sm">
                                                 <div className="flex gap-2">
                                                   <span className="text-muted-foreground">Contact Person:</span>
-                                                  <span>{physician.officeContactPerson || 'N/A'}</span>
+                                                  <span>{'N/A'}</span>
                                                 </div>
                                                 <div className="flex gap-2">
                                                   <span className="text-muted-foreground">Group Tax ID:</span>
-                                                  <span className="font-mono">{physician.groupTaxId || 'N/A'}</span>
+                                                  <span className="font-mono">{'N/A'}</span>
                                                 </div>
-                                                {physician.secondaryPracticeAddresses && physician.secondaryPracticeAddresses.length > 0 && (
+                                                {false && (
                                                   <div>
                                                     <span className="text-muted-foreground">Secondary Addresses:</span>
                                                     <ul className="mt-1 ml-4 list-disc">
-                                                      {physician.secondaryPracticeAddresses.map((addr, idx) => (
+                                                      {[].map((addr, idx) => (
                                                         <li key={idx} className="text-sm">{addr}</li>
                                                       ))}
                                                     </ul>
@@ -644,14 +622,14 @@ export default function PracticePage() {
                                             </div>
 
                                             {/* Full Primary Address */}
-                                            {physician.primaryPracticeAddress && (
+                                            {physician.practiceId && (
                                               <div className="space-y-2">
                                                 <h4 className="font-semibold flex items-center gap-2">
                                                   <MapPin className="h-4 w-4" />
                                                   Primary Practice Address
                                                 </h4>
                                                 <p className="text-sm whitespace-pre-wrap">
-                                                  {physician.primaryPracticeAddress}
+                                                  Practice address stored in separate table
                                                 </p>
                                               </div>
                                             )}
@@ -691,51 +669,31 @@ export default function PracticePage() {
                                 </Button>
                               </Link>
                             </TableCell>
-                            <TableCell>{physician.practiceName || 'N/A'}</TableCell>
+                            <TableCell>{physician.practiceId ? 'Practice Assigned' : 'N/A'}</TableCell>
                             <TableCell>
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <span className="cursor-help">
-                                      {formatAddress(physician.primaryPracticeAddress)}
+                                      {physician.practiceId ? 'Practice Address Available' : 'N/A'}
                                     </span>
                                   </TooltipTrigger>
-                                  {physician.primaryPracticeAddress && (
+                                  {physician.practiceId && (
                                     <TooltipContent>
-                                      <p className="max-w-xs whitespace-pre-wrap">{physician.primaryPracticeAddress}</p>
+                                      <p className="max-w-xs whitespace-pre-wrap">Practice address stored in separate table</p>
                                     </TooltipContent>
                                   )}
                                 </Tooltip>
                               </TooltipProvider>
                             </TableCell>
                             <TableCell>
-                              {physician.officePhone ? (
-                                <div className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3 text-muted-foreground" />
-                                  {formatPhoneNumber(physician.officePhone)}
-                                </div>
-                              ) : (
-                                'N/A'
-                              )}
+                              {'N/A'}
                             </TableCell>
                             <TableCell>
-                              {physician.officeFax ? (
-                                <div className="flex items-center gap-1">
-                                  <Printer className="h-3 w-3 text-muted-foreground" />
-                                  {formatPhoneNumber(physician.officeFax)}
-                                </div>
-                              ) : (
-                                'N/A'
-                              )}
+                              {'N/A'}
                             </TableCell>
                             <TableCell>
-                              {physician.groupNpi ? (
-                                <Badge variant="outline" className="font-mono">
-                                  {physician.groupNpi}
-                                </Badge>
-                              ) : (
-                                'N/A'
-                              )}
+                              {'N/A'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -770,17 +728,17 @@ export default function PracticePage() {
                                           <div className="space-y-1 text-sm">
                                             <div className="flex gap-2">
                                               <span className="text-muted-foreground">Contact Person:</span>
-                                              <span>{physician.officeContactPerson || 'N/A'}</span>
+                                              <span>{'N/A'}</span>
                                             </div>
                                             <div className="flex gap-2">
                                               <span className="text-muted-foreground">Group Tax ID:</span>
-                                              <span className="font-mono">{physician.groupTaxId || 'N/A'}</span>
+                                              <span className="font-mono">{'N/A'}</span>
                                             </div>
-                                            {physician.secondaryPracticeAddresses && physician.secondaryPracticeAddresses.length > 0 && (
+                                            {false && (
                                               <div>
                                                 <span className="text-muted-foreground">Secondary Addresses:</span>
                                                 <ul className="mt-1 ml-4 list-disc">
-                                                  {physician.secondaryPracticeAddresses.map((addr, idx) => (
+                                                  {[].map((addr, idx) => (
                                                     <li key={idx} className="text-sm">{addr}</li>
                                                   ))}
                                                 </ul>
@@ -842,14 +800,14 @@ export default function PracticePage() {
                                         </div>
 
                                         {/* Full Primary Address */}
-                                        {physician.primaryPracticeAddress && (
+                                        {physician.practiceId && (
                                           <div className="space-y-2">
                                             <h4 className="font-semibold flex items-center gap-2">
                                               <MapPin className="h-4 w-4" />
                                               Primary Practice Address
                                             </h4>
                                             <p className="text-sm whitespace-pre-wrap">
-                                              {physician.primaryPracticeAddress}
+                                              Practice address stored in separate table
                                             </p>
                                           </div>
                                         )}
