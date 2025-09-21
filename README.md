@@ -3,6 +3,7 @@
 **DEPLOYMENT STATUS**: Updated to Autoscale deployment (September 17, 2025)
 - Production runs Express server: `npm run start:prod`
 - API endpoints available: /health, /api/*
+- UAT credentials: uat@physiciancrm.com / UAT2025!Test
 
 # Welcome to your Lovable project
 

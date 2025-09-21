@@ -18,7 +18,6 @@ const SUSPICIOUS_PATTERNS = [
 const VALID_PATHS = [
   "/",
   "/login",
-  "/signup",
   "/physicians",
   "/physicians/new",
   "/search",
@@ -26,22 +25,10 @@ const VALID_PATHS = [
   "/contact",
   "/practice",
   "/licensure",
-  "/dea-csr",
   "/education",
   "/work-history",
   "/documents",
-  "/document-management",
-  "/renewal-workflows",
-  "/analytics",
   "/settings",
-];
-
-// Valid dynamic route patterns
-const VALID_DYNAMIC_PATTERNS = [
-  { pattern: /^\/physicians\/[a-zA-Z0-9\-_]+\/?$/, name: "physician-profile" },
-  { pattern: /^\/physicians\/[a-zA-Z0-9\-_]+\/edit\/?$/, name: "physician-edit" },
-  { pattern: /^\/physicians\/[a-zA-Z0-9\-_]+\/documents\/?$/, name: "physician-documents" },
-  { pattern: /^\/document-management\/[a-zA-Z0-9\-_]+\/?$/, name: "document-management-physician" },
 ];
 
 /**
@@ -65,16 +52,9 @@ function captureStackTrace(): string {
  * Checks if a path matches any suspicious patterns
  */
 function validateRoute(path: string): { isValid: boolean; suspiciousPattern?: string; reason?: string } {
-  // Check against known valid static paths first
+  // Check against known valid paths first
   if (VALID_PATHS.includes(path)) {
     return { isValid: true };
-  }
-
-  // Check against valid dynamic route patterns
-  for (const { pattern, name } of VALID_DYNAMIC_PATTERNS) {
-    if (pattern.test(path)) {
-      return { isValid: true };
-    }
   }
 
   // Check against suspicious patterns
@@ -88,7 +68,7 @@ function validateRoute(path: string): { isValid: boolean; suspiciousPattern?: st
     }
   }
 
-  // If not in valid paths, not valid dynamic pattern, and not suspicious, it's just a 404
+  // If not in valid paths and not suspicious, it's just a 404
   return { isValid: false, reason: `Path "${path}" not found in valid routes` };
 }
 
