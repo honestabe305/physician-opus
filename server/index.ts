@@ -13,9 +13,8 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Trust proxy configuration - MUST be before other middleware
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1); // Trust first proxy (required for Replit deployment)
-}
+// Always trust proxy in Replit environment (both dev and production)
+app.set('trust proxy', 1); // Trust first proxy (required for Replit deployment)
 
 // Middleware setup
 app.use(cors({
