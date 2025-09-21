@@ -306,7 +306,13 @@ export default function PhysicianProfilePage() {
         </div>
         <Button 
           className="gap-2 bg-gradient-to-r from-primary to-accent"
-          onClick={() => setLocation(`/physicians/${id}/edit`)}
+          onClick={() => {
+            if (id && typeof id === 'string' && id.trim() !== '') {
+              setLocation(`/physicians/${id}/edit`);
+            } else {
+              console.error('Invalid physician ID for edit:', id);
+            }
+          }}
           data-testid="button-edit-physician"
         >
           <Edit className="h-4 w-4" />

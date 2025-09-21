@@ -60,11 +60,14 @@ export default function EditPhysicianPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  // Debug logging
+  console.log('EditPhysicianPage - ID from params:', id, typeof id);
+
   // Fetch physician data
   const { data: physician, isLoading, error } = useQuery<SelectPhysician>({
     queryKey: ['/physicians', id],
     queryFn: () => apiRequest(`/physicians/${id}`),
-    enabled: !!id,
+    enabled: !!id && typeof id === 'string' && id.trim() !== '',
     retry: (failureCount, error) => {
       // Don't retry on 404 (physician not found) or 401 (authentication required)
       if (error instanceof Error && (
@@ -100,23 +103,35 @@ export default function EditPhysicianPage() {
 
   // Update form when physician data loads
   useEffect(() => {
-    if (physician) {
-      form.reset({
-        fullLegalName: physician.fullLegalName || "",
-        npi: physician.npi || "",
-        emailAddress: physician.emailAddress || "",
-        phoneNumbers: physician.phoneNumbers?.join(", ") || "",
-        mailingAddress: physician.mailingAddress || "",
-        dateOfBirth: physician.dateOfBirth || "",
-        gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "") || "",
-        practiceName: physician.practiceName || "",
-        officePhone: physician.officePhone || "",
-        primaryPracticeAddress: physician.primaryPracticeAddress || "",
-        groupNpi: physician.groupNpi || "",
-        status: (physician.status as "active" | "pending" | "review" | "inactive") || "active",
-      });
+    if (physician && typeof physician === 'object') {
+      try {
+        const formData = {
+          fullLegalName: physician.fullLegalName || "",
+          npi: physician.npi || "",
+          emailAddress: physician.emailAddress || "",
+          phoneNumbers: Array.isArray(physician.phoneNumbers) ? physician.phoneNumbers.join(", ") : "",
+          mailingAddress: physician.mailingAddress || "",
+          dateOfBirth: physician.dateOfBirth || "",
+          gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "") || "",
+          practiceName: physician.practiceName || "",
+          officePhone: physician.officePhone || "",
+          primaryPracticeAddress: physician.primaryPracticeAddress || "",
+          groupNpi: physician.groupNpi || "",
+          status: (physician.status as "active" | "pending" | "review" | "inactive") || "active",
+        };
+        
+        console.log('EditPhysicianPage - Resetting form with data:', formData);
+        form.reset(formData);
+      } catch (error) {
+        console.error('EditPhysicianPage - Error resetting form:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load physician data into form",
+          variant: "destructive",
+        });
+      }
     }
-  }, [physician, form]);
+  }, [physician, form, toast]);
 
   // Update mutation
   const updatePhysicianMutation = useMutation({
@@ -232,7 +247,35 @@ export default function EditPhysicianPage() {
     );
   }
 
-  if (isLoading || !physician) {
+  if (!id || typeof id !== 'string' || id.trim() === '') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setLocation('/physicians')}
+            className="gap-2"
+            data-testid="button-back-to-list"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Physicians
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight text-red-600">
+            Invalid Physician ID
+          </h1>
+        </div>
+        
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No valid physician ID provided. Please select a physician from the list.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
