@@ -18,6 +18,32 @@ export const documentTypeEnum = pgEnum('document_type', [
 export const licenseStatusEnum = pgEnum('license_status', ['active', 'expired', 'pending_renewal']);
 export const renewalCycleEnum = pgEnum('renewal_cycle', ['annual', 'biennial']);
 export const providerRoleEnum = pgEnum('provider_role', ['physician', 'pa', 'np']);
+
+// Comprehensive clinician type enum for broader healthcare professional categories
+export const clinicianTypeEnum = pgEnum('clinician_type', [
+  // Physicians
+  'md', 'do',
+  // Physician Assistants
+  'pa',
+  // Nurse Practitioners and Advanced Practice
+  'np', 'cnm', 'crna', 'cns',
+  // Registered Nurses
+  'rn',
+  // Licensed Practical/Vocational Nurses  
+  'lpn', 'lvn',
+  // Nursing Assistants
+  'cna', 'na',
+  // Medical Assistants
+  'ma',
+  // Administrative Staff
+  'admin_staff', 'receptionist', 'billing_specialist',
+  // Clinical Support Staff
+  'medical_technician', 'lab_technician', 'radiology_tech',
+  // Other Healthcare Professionals
+  'therapist', 'social_worker', 'case_manager',
+  // Other/Unspecified
+  'other'
+]);
 export const licenseDocumentTypeEnum = pgEnum('license_document_type', [
   'license', 'dea_cert', 'csr_cert', 'supervision_agreement', 
   'collaboration_agreement', 'cme_cert', 'mate_cert'
@@ -124,6 +150,7 @@ export const physicians = pgTable('physicians', {
   
   // Provider Role Information (NEW)
   providerRole: providerRoleEnum('provider_role'),
+  clinicianType: clinicianTypeEnum('clinician_type'), // New comprehensive clinician type field
   supervisingPhysicianId: uuid('supervising_physician_id').references(() => physicians.id),
   collaborationPhysicianId: uuid('collaboration_physician_id').references(() => physicians.id),
   
