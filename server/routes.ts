@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createStorage } from './storage';
 import {
   insertProfileSchema,
+  insertPracticeSchema,
   insertPhysicianSchema,
   insertPhysicianLicenseSchema,
   insertPhysicianCertificationSchema,
@@ -15,6 +16,7 @@ import {
   insertDeaRegistrationSchema,
   insertCsrLicenseSchema,
   insertNotificationSchema,
+  type SelectPractice,
   type SelectPhysician,
   type SelectPhysicianLicense,
   type SelectPhysicianCertification,
@@ -779,6 +781,67 @@ router.put('/profiles/:id', asyncHandler(async (req: any, res: any) => {
 
 router.delete('/profiles/:id', asyncHandler(async (req: any, res: any) => {
   await storage.deleteProfile(req.params.id);
+  res.status(204).send();
+}));
+
+// Practice routes
+router.post('/practices', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertPracticeSchema.parse(req.body);
+  const practice = await storage.createPractice(validatedData);
+  res.status(201).json(practice);
+}));
+
+router.get('/practices', asyncHandler(async (req: any, res: any) => {
+  const { search } = req.query;
+  
+  let practices: SelectPractice[];
+  
+  if (search) {
+    practices = await storage.searchPractices(search as string);
+  } else {
+    practices = await storage.getAllPractices();
+  }
+  
+  res.json(practices);
+}));
+
+router.get('/practices/:id', asyncHandler(async (req: any, res: any) => {
+  const practice = await storage.getPractice(req.params.id);
+  if (!practice) {
+    return res.status(404).json({ error: 'Practice not found' });
+  }
+  res.json(practice);
+}));
+
+router.get('/practices/:id/clinicians', asyncHandler(async (req: any, res: any) => {
+  const clinicians = await storage.getPhysiciansByPractice(req.params.id);
+  res.json(clinicians);
+}));
+
+router.get('/practices/name/:name', asyncHandler(async (req: any, res: any) => {
+  const practice = await storage.getPracticeByName(req.params.name);
+  if (!practice) {
+    return res.status(404).json({ error: 'Practice not found' });
+  }
+  res.json(practice);
+}));
+
+router.get('/practices/npi/:npi', asyncHandler(async (req: any, res: any) => {
+  const practice = await storage.getPracticeByNpi(req.params.npi);
+  if (!practice) {
+    return res.status(404).json({ error: 'Practice not found' });
+  }
+  res.json(practice);
+}));
+
+router.put('/practices/:id', asyncHandler(async (req: any, res: any) => {
+  const validatedData = insertPracticeSchema.partial().parse(req.body);
+  const practice = await storage.updatePractice(req.params.id, validatedData);
+  res.json(practice);
+}));
+
+router.delete('/practices/:id', asyncHandler(async (req: any, res: any) => {
+  await storage.deletePractice(req.params.id);
   res.status(204).send();
 }));
 
