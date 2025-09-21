@@ -485,7 +485,7 @@ export default function LicensurePage() {
 
   // Get license status and badge variant
   const getLicenseStatus = (expirationDate: string | null) => {
-    if (!expirationDate) return { status: 'Active', variant: 'secondary' as const, icon: CheckCircle };
+    if (!expirationDate) return { status: 'Active', variant: 'success' as const, icon: CheckCircle };
     
     const today = new Date();
     const expDate = new Date(expirationDate);
@@ -496,9 +496,9 @@ export default function LicensurePage() {
     } else if (daysUntilExpiration <= 30) {
       return { status: 'Expiring Soon', variant: 'destructive' as const, icon: AlertTriangle };
     } else if (daysUntilExpiration <= 90) {
-      return { status: 'Expiring', variant: 'outline' as const, icon: Clock };
+      return { status: 'Expiring', variant: 'warning' as const, icon: Clock };
     }
-    return { status: 'Active', variant: 'secondary' as const, icon: CheckCircle };
+    return { status: 'Active', variant: 'success' as const, icon: CheckCircle };
   };
 
   // Format date for display
@@ -805,7 +805,7 @@ export default function LicensurePage() {
                       <div className="flex items-center gap-3">
                         <status.icon className={`h-4 w-4 ${
                           status.variant === 'destructive' ? 'text-red-500' :
-                          status.variant === 'outline' ? 'text-yellow-500' :
+                          status.variant === 'warning' ? 'text-yellow-500' :
                           'text-green-500'
                         }`} />
                         <div>
@@ -1064,17 +1064,7 @@ export default function LicensurePage() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 pt-2">
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        data-testid={`button-edit-license-${license.id}`}
-                                        onClick={() => {
-                                          toast({
-                                            title: "Edit License",
-                                            description: "License editing functionality coming soon.",
-                                          });
-                                        }}
-                                      >
+                                      <Button variant="outline" size="sm" data-testid={`button-edit-${license.id}`}>
                                         <Edit className="h-3 w-3 mr-1" />
                                         Edit License
                                       </Button>
@@ -1262,17 +1252,7 @@ export default function LicensurePage() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 pt-2">
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        data-testid={`button-edit-cert-${cert.id}`}
-                                        onClick={() => {
-                                          toast({
-                                            title: "Edit Certification",
-                                            description: "Certification editing functionality coming soon.",
-                                          });
-                                        }}
-                                      >
+                                      <Button variant="outline" size="sm" data-testid={`button-edit-cert-${cert.id}`}>
                                         <Edit className="h-3 w-3 mr-1" />
                                         Edit Certification
                                       </Button>
@@ -1349,7 +1329,7 @@ export default function LicensurePage() {
                               </TableCell>
                               <TableCell>DEA Registration</TableCell>
                               <TableCell>
-                                <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                                <Badge variant="success" className="flex items-center gap-1 w-fit">
                                   <CheckCircle className="h-3 w-3" />
                                   Registered
                                 </Badge>
