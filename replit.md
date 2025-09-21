@@ -66,7 +66,7 @@ The system implements comprehensive authentication and role-based access control
   - Password complexity validation (min 8 chars, uppercase, lowercase, number, special char)
   - Session extension and remember me functionality (24h default, 7 days with remember me)
   - Lock screen for temporary session protection without logout
-- **Default admin account**: admin@physiciancrm.com (password: Admin123!@#)
+- **Admin account**: Created during initial setup via secure deployment process
 
 ### Data Validation and Type Safety
 - **Zod schemas** for runtime validation on both client and server

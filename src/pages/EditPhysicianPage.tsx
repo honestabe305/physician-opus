@@ -41,7 +41,7 @@ import type { SelectPhysician } from "../../shared/schema";
 const editPhysicianSchema = z.object({
   fullLegalName: z.string().min(2, "Full name must be at least 2 characters"),
   npi: z.string().min(10, "NPI must be at least 10 characters").max(10, "NPI must be exactly 10 characters"),
-  emailAddress: z.string().email("Invalid email address").optional().or(z.literal("")),
+  emailAddress: z.string().email("Invalid email address").or(z.literal("")),
   phoneNumbers: z.string().optional(),
   mailingAddress: z.string().optional(),
   dateOfBirth: z.string().optional(),
@@ -65,6 +65,18 @@ export default function EditPhysicianPage() {
     queryKey: ['/physicians', id],
     queryFn: () => apiRequest(`/physicians/${id}`),
     enabled: !!id,
+    retry: (failureCount, error) => {
+      // Don't retry on 404 (physician not found) or 401 (authentication required)
+      if (error instanceof Error && (
+        error.message.includes('404') || 
+        error.message.includes('Authentication required') ||
+        error.message.includes('401')
+      )) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Form setup
@@ -154,14 +166,68 @@ export default function EditPhysicianPage() {
   };
 
   if (error) {
+    const isNotFound = error instanceof Error && (
+      error.message.includes('404') || 
+      error.message.includes('not found')
+    );
+    const isAuthRequired = error instanceof Error && (
+      error.message.includes('Authentication required') || 
+      error.message.includes('401')
+    );
+
     return (
       <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setLocation('/physicians')}
+            className="gap-2"
+            data-testid="button-back-to-list"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Physicians
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight text-red-600">
+            {isNotFound ? 'Physician Not Found' : 'Access Error'}
+          </h1>
+        </div>
+        
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to load physician: {error instanceof Error ? error.message : 'Unknown error'}
+            {isNotFound ? (
+              <>
+                The physician with ID "{id}" could not be found. 
+                It may have been deleted or the URL is incorrect.
+              </>
+            ) : isAuthRequired ? (
+              <>
+                You need to be logged in to edit physician profiles. 
+                Please log in and try again.
+              </>
+            ) : (
+              <>
+                Failed to load physician: {error.message}
+              </>
+            )}
           </AlertDescription>
         </Alert>
+
+        {isNotFound && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Available Physicians:</h3>
+            <p className="text-blue-700 dark:text-blue-300 text-sm">
+              You can view and edit other physician profiles from the main physicians list.
+            </p>
+            <Button
+              className="mt-3"
+              onClick={() => setLocation('/physicians')}
+              data-testid="button-view-all-physicians"
+            >
+              View All Physicians
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -260,7 +326,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Full Legal Name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter full legal name" />
+                        <Input {...field} placeholder="Enter full legal name" data-testid="input-full-legal-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -273,7 +339,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>NPI *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter 10-digit NPI" maxLength={10} />
+                        <Input {...field} placeholder="Enter 10-digit NPI" maxLength={10} data-testid="input-npi" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -288,7 +354,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Date of Birth</FormLabel>
                       <FormControl>
-                        <Input {...field} type="date" />
+                        <Input {...field} type="date" data-testid="input-date-of-birth" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -302,7 +368,7 @@ export default function EditPhysicianPage() {
                       <FormLabel>Gender</FormLabel>
                       <FormControl>
                         <Select value={field.value || ""} onValueChange={field.onChange}>
-                          <SelectTrigger>
+                          <SelectTrigger data-testid="select-gender">
                             <SelectValue placeholder="Select gender" />
                           </SelectTrigger>
                           <SelectContent>
@@ -327,7 +393,7 @@ export default function EditPhysicianPage() {
                     <FormLabel>Status</FormLabel>
                     <FormControl>
                       <Select value={field.value || "active"} onValueChange={field.onChange}>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-status">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -362,7 +428,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input {...field} type="email" placeholder="Enter email address" />
+                        <Input {...field} type="email" placeholder="Enter email address" data-testid="input-email-address" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -375,7 +441,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Phone Numbers</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter phone numbers (comma-separated)" />
+                        <Input {...field} placeholder="Enter phone numbers (comma-separated)" data-testid="input-phone-numbers" />
                       </FormControl>
                       <FormDescription>
                         Separate multiple phone numbers with commas
@@ -392,7 +458,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Mailing Address</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter mailing address" rows={3} />
+                      <Textarea {...field} placeholder="Enter mailing address" rows={3} data-testid="textarea-mailing-address" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -418,7 +484,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Practice Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter practice name" />
+                        <Input {...field} placeholder="Enter practice name" data-testid="input-practice-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -431,7 +497,7 @@ export default function EditPhysicianPage() {
                     <FormItem>
                       <FormLabel>Office Phone</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter office phone" />
+                        <Input {...field} placeholder="Enter office phone" data-testid="input-office-phone" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -445,7 +511,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Primary Practice Address</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter primary practice address" rows={3} />
+                      <Textarea {...field} placeholder="Enter primary practice address" rows={3} data-testid="textarea-primary-practice-address" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -458,7 +524,7 @@ export default function EditPhysicianPage() {
                   <FormItem>
                     <FormLabel>Group NPI</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Enter group NPI (optional)" />
+                      <Input {...field} placeholder="Enter group NPI (optional)" data-testid="input-group-npi" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -474,6 +540,7 @@ export default function EditPhysicianPage() {
               variant="outline"
               onClick={handleCancel}
               disabled={updatePhysicianMutation.isPending}
+              data-testid="button-cancel"
             >
               Cancel
             </Button>
@@ -481,6 +548,7 @@ export default function EditPhysicianPage() {
               type="submit"
               disabled={updatePhysicianMutation.isPending}
               className="gap-2"
+              data-testid="button-save-changes"
             >
               <Save className="h-4 w-4" />
               {updatePhysicianMutation.isPending ? "Saving..." : "Save Changes"}
