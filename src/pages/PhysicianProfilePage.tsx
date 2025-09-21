@@ -307,8 +307,9 @@ export default function PhysicianProfilePage() {
         <Button 
           className="gap-2 bg-gradient-to-r from-primary to-accent"
           onClick={() => {
+            console.log('Edit Profile clicked, ID:', id, 'Type:', typeof id);
             if (id && typeof id === 'string' && id.trim() !== '') {
-              setLocation(`/physicians/${id}/edit`);
+              setLocation(`/physicians/${encodeURIComponent(id)}/edit`);
             } else {
               console.error('Invalid physician ID for edit:', id);
             }

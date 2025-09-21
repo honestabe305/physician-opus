@@ -56,12 +56,43 @@ const editPhysicianSchema = z.object({
 type EditPhysicianForm = z.infer<typeof editPhysicianSchema>;
 
 export default function EditPhysicianPage() {
-  const { id } = useParams() as { id: string };
+  const params = useParams() as { id?: string };
+  const id = params.id;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Debug logging
   console.log('EditPhysicianPage - ID from params:', id, typeof id);
+  
+  // Early return if no ID is provided
+  if (!id || typeof id !== 'string' || id.trim() === '') {
+    console.error('EditPhysicianPage - No valid ID provided');
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setLocation('/physicians')}
+            className="gap-2"
+            data-testid="button-back-to-list"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Physicians
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight text-red-600">
+            Invalid Physician ID
+          </h1>
+        </div>
+        
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No valid physician ID provided. Please select a physician from the list.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   // Fetch physician data
   const { data: physician, isLoading, error } = useQuery<SelectPhysician>({
@@ -247,33 +278,7 @@ export default function EditPhysicianPage() {
     );
   }
 
-  if (!id || typeof id !== 'string' || id.trim() === '') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setLocation('/physicians')}
-            className="gap-2"
-            data-testid="button-back-to-list"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Physicians
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight text-red-600">
-            Invalid Physician ID
-          </h1>
-        </div>
-        
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            No valid physician ID provided. Please select a physician from the list.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  
 
   if (isLoading) {
     return (
@@ -314,7 +319,7 @@ export default function EditPhysicianPage() {
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
               <Link href={`/physicians/${id}`} data-testid="breadcrumb-profile">
-                Dr. {physician.fullLegalName}
+                Dr. {physician?.fullLegalName || 'Unknown'}
               </Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
@@ -341,7 +346,7 @@ export default function EditPhysicianPage() {
             Edit Physician Profile
           </h1>
           <p className="text-muted-foreground">
-            Update information for Dr. {physician.fullLegalName}
+            Update information for Dr. {physician?.fullLegalName || 'Unknown'}
           </p>
         </div>
       </div>
