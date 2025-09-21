@@ -12,15 +12,17 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: true,
     hmr: {
       port: 5000,
-      clientPort: 80,
+      clientPort: 443,  // Use HTTPS port for Replit
+      protocol: 'wss',   // WebSocket Secure for HTTPS environments
     },
-    proxy: mode === 'development' ? {
+    proxy: {
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path,  // Keep the /api prefix
       },
-    } : undefined,
+    },
   },
   preview: {
     host: "0.0.0.0",
