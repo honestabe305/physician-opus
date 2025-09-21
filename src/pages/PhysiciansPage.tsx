@@ -101,8 +101,8 @@ export default function PhysiciansPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Physicians</h1>
-            <p className="text-muted-foreground">Manage physician profiles and credentials</p>
+            <h1 className="text-3xl font-bold text-foreground">Clinicians</h1>
+            <p className="text-muted-foreground">Manage clinician profiles and credentials</p>
           </div>
         </div>
         <Alert variant="destructive">
@@ -119,13 +119,13 @@ export default function PhysiciansPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Physicians</h1>
-          <p className="text-muted-foreground">Manage physician profiles and credentials</p>
+          <h1 className="text-3xl font-bold text-foreground">Clinicians</h1>
+          <p className="text-muted-foreground">Manage clinician profiles and credentials</p>
         </div>
         <Link href="/physicians/new">
           <Button className="gap-2 bg-gradient-to-r from-primary to-accent" data-testid="button-add-physician">
             <Plus className="h-4 w-4" />
-            Add New Physician
+            Add New Clinician
           </Button>
         </Link>
       </div>
@@ -134,12 +134,12 @@ export default function PhysiciansPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Physician Directory</CardTitle>
+              <CardTitle>Clinician Directory</CardTitle>
               <CardDescription>
                 {isLoading ? (
                   <Skeleton className="h-4 w-32" />
                 ) : (
-                  `${physicians.length} physician${physicians.length !== 1 ? 's' : ''}`
+                  `${physicians.length} clinician${physicians.length !== 1 ? 's' : ''}`
                 )}
               </CardDescription>
             </div>
@@ -147,7 +147,7 @@ export default function PhysiciansPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search physicians..."
+                  placeholder="Search clinicians..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 w-64"
@@ -174,7 +174,7 @@ export default function PhysiciansPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead className="font-semibold">Physician</TableHead>
+                  <TableHead className="font-semibold">Clinician</TableHead>
                   <TableHead className="font-semibold">NPI</TableHead>
                   <TableHead className="font-semibold">Practice</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
@@ -288,7 +288,7 @@ export default function PhysiciansPage() {
           {!isLoading && physicians.length > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between px-2 py-4">
               <div className="text-sm text-muted-foreground">
-                Showing {startIndex + 1} to {Math.min(endIndex, physicians.length)} of {physicians.length} physicians
+                Showing {startIndex + 1} to {Math.min(endIndex, physicians.length)} of {physicians.length} clinicians
               </div>
               <div className="flex items-center gap-2">
                 <Button

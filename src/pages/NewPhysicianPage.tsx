@@ -137,7 +137,7 @@ export default function NewPhysicianPage() {
     onSuccess: (data) => {
       toast({
         title: "Success",
-        description: "Physician profile created successfully!",
+        description: "Clinician profile created successfully!",
       });
       queryClient.invalidateQueries({ queryKey: ['/physicians'] });
       setLocation('/physicians');
@@ -145,7 +145,7 @@ export default function NewPhysicianPage() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create physician profile",
+        description: error instanceof Error ? error.message : "Failed to create clinician profile",
         variant: "destructive",
       });
     },
@@ -195,8 +195,8 @@ export default function NewPhysicianPage() {
           Back
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Add New Physician</h1>
-          <p className="text-muted-foreground">Enter physician information and credentials</p>
+          <h1 className="text-3xl font-bold text-foreground">Add New Clinician</h1>
+          <p className="text-muted-foreground">Enter clinician information and credentials</p>
         </div>
       </div>
 
@@ -262,7 +262,7 @@ export default function NewPhysicianPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <User className="h-5 w-5 text-primary" />
-                        Physician Demographics
+                        Clinician Demographics
                       </CardTitle>
                       <CardDescription>
                         Basic personal information and identifiers
@@ -451,7 +451,7 @@ export default function NewPhysicianPage() {
                               <FormControl>
                                 <Input 
                                   type="email" 
-                                  placeholder="physician@example.com"
+                                  placeholder="clinician@example.com"
                                   data-testid="input-email"
                                   {...field} 
                                 />
@@ -703,7 +703,7 @@ export default function NewPhysicianPage() {
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                          Licensure information will be added after the initial physician profile is created.
+                          Licensure information will be added after the initial clinician profile is created.
                         </AlertDescription>
                       </Alert>
                     </CardContent>
@@ -726,7 +726,7 @@ export default function NewPhysicianPage() {
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                          Education information will be added after the initial physician profile is created.
+                          Education information will be added after the initial clinician profile is created.
                         </AlertDescription>
                       </Alert>
                     </CardContent>
@@ -749,7 +749,7 @@ export default function NewPhysicianPage() {
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                          Document uploads will be available after the initial physician profile is created.
+                          Document uploads will be available after the initial clinician profile is created.
                         </AlertDescription>
                       </Alert>
                     </CardContent>
@@ -793,7 +793,7 @@ export default function NewPhysicianPage() {
                       ) : (
                         <Save className="h-4 w-4" />
                       )}
-                      Create Physician
+                      Create Clinician
                     </Button>
                   ) : (
                     <Button 
