@@ -35,7 +35,7 @@ import {
 import { Link, useParams, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { SelectPhysician } from "../../shared/schema";
+import type { SelectPhysician, SelectPractice } from "../../shared/schema";
 
 // Form validation schema
 const editPhysicianSchema = z.object({
@@ -46,10 +46,9 @@ const editPhysicianSchema = z.object({
   mailingAddress: z.string().optional(),
   dateOfBirth: z.string().optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say", "not_specified", ""]).optional(),
-  practiceName: z.string().optional(),
-  officePhone: z.string().optional(),
-  primaryPracticeAddress: z.string().optional(),
-  groupNpi: z.string().optional(),
+  practiceId: z.string().optional(),
+  createNewPractice: z.boolean().optional(),
+  newPracticeName: z.string().optional(),
   status: z.enum(["active", "pending", "review", "inactive"]).optional(),
 });
 
@@ -113,6 +112,12 @@ export default function EditPhysicianPage() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  // Fetch practices for selection
+  const { data: practices = [] } = useQuery<SelectPractice[]>({
+    queryKey: ['/practices'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
   // Form setup
   const form = useForm<EditPhysicianForm>({
     resolver: zodResolver(editPhysicianSchema),
@@ -124,10 +129,9 @@ export default function EditPhysicianPage() {
       mailingAddress: "",
       dateOfBirth: "",
       gender: "not_specified",
-      practiceName: "",
-      officePhone: "",
-      primaryPracticeAddress: "",
-      groupNpi: "",
+      practiceId: "",
+      createNewPractice: false,
+      newPracticeName: "",
       status: "active",
     },
   });
@@ -144,10 +148,9 @@ export default function EditPhysicianPage() {
           mailingAddress: physician.mailingAddress || "",
           dateOfBirth: physician.dateOfBirth || "",
           gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "not_specified" | "") || "not_specified",
-          practiceName: physician.practiceName || "",
-          officePhone: physician.officePhone || "",
-          primaryPracticeAddress: physician.primaryPracticeAddress || "",
-          groupNpi: physician.groupNpi || "",
+          practiceId: physician.practiceId || "",
+          createNewPractice: false,
+          newPracticeName: "",
           status: (physician.status as "active" | "pending" | "review" | "inactive") || "active",
         };
         
@@ -166,7 +169,22 @@ export default function EditPhysicianPage() {
 
   // Update mutation
   const updatePhysicianMutation = useMutation({
-    mutationFn: (data: EditPhysicianForm) => {
+    mutationFn: async (data: EditPhysicianForm) => {
+      let practiceId = data.practiceId;
+
+      // Handle new practice creation
+      if (data.createNewPractice && data.newPracticeName) {
+        const newPractice = await apiRequest('/practices', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: data.newPracticeName,
+            isActive: true
+          }),
+        });
+        practiceId = newPractice.id;
+      }
+
+      // Transform form data to match API expectations
       const updateData = {
         ...data,
         phoneNumbers: data.phoneNumbers ? data.phoneNumbers.split(",").map(p => p.trim()).filter(p => p) : [],
@@ -174,10 +192,10 @@ export default function EditPhysicianPage() {
         emailAddress: data.emailAddress || null,
         mailingAddress: data.mailingAddress || null,
         gender: (data.gender && data.gender !== "not_specified") ? data.gender : null,
-        practiceName: data.practiceName || null,
-        officePhone: data.officePhone || null,
-        primaryPracticeAddress: data.primaryPracticeAddress || null,
-        groupNpi: data.groupNpi || null,
+        practiceId: practiceId, // Use the computed practice ID
+        // Remove form-only fields
+        createNewPractice: undefined,
+        newPracticeName: undefined,
       };
 
       return apiRequest(`/physicians/${id}`, {
@@ -188,6 +206,7 @@ export default function EditPhysicianPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/physicians', id] });
       queryClient.invalidateQueries({ queryKey: ['/physicians'] });
+      queryClient.invalidateQueries({ queryKey: ['/practices'] });
       toast({
         title: "Success",
         description: "Physician profile updated successfully.",
@@ -522,60 +541,71 @@ export default function EditPhysicianPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="practiceId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Practice *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-practice">
+                          <SelectValue placeholder="Select practice" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {practices.map((practice) => (
+                          <SelectItem key={practice.id} value={practice.id}>
+                            {practice.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="createNewPractice"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={field.onChange}
+                        data-testid="checkbox-create-new-practice"
+                        className="h-4 w-4"
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-normal">
+                      Create new practice
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('createNewPractice') && (
                 <FormField
                   control={form.control}
-                  name="practiceName"
+                  name="newPracticeName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Practice Name</FormLabel>
+                      <FormLabel>New Practice Name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter practice name" data-testid="input-practice-name" />
+                        <Input 
+                          placeholder="Enter new practice name"
+                          data-testid="input-new-practice-name"
+                          {...field} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="officePhone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Office Phone</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Enter office phone" data-testid="input-office-phone" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="primaryPracticeAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primary Practice Address</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} placeholder="Enter primary practice address" rows={3} data-testid="textarea-primary-practice-address" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="groupNpi"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Group NPI</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter group NPI (optional)" data-testid="input-group-npi" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              )}
             </CardContent>
           </Card>
 
