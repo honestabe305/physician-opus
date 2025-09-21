@@ -136,7 +136,7 @@ export default function EditPhysicianPage() {
   useEffect(() => {
     if (physician && typeof physician === 'object') {
       try {
-        const formData = {
+        const formData: EditPhysicianForm = {
           fullLegalName: physician.fullLegalName || "",
           npi: physician.npi || "",
           emailAddress: physician.emailAddress || "",
@@ -278,9 +278,7 @@ export default function EditPhysicianPage() {
     );
   }
 
-  
-
-  if (isLoading) {
+  if (isLoading || !physician) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
