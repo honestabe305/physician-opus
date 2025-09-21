@@ -39,8 +39,16 @@ export const clinicianTypeEnum = pgEnum('clinician_type', [
   'admin_staff', 'receptionist', 'billing_specialist',
   // Clinical Support Staff
   'medical_technician', 'lab_technician', 'radiology_tech',
+  // Licensed Healthcare Professionals
+  'pharmacist', 'dentist', 'optometrist', 'podiatrist', 'chiropractor',
+  // Therapy Professionals
+  'physical_therapist', 'occupational_therapist', 'speech_language_pathologist', 'respiratory_therapist',
+  // Emergency Medical Services
+  'paramedic', 'emt',
+  // Specialized Technicians
+  'radiation_therapist', 'sonographer',
   // Other Healthcare Professionals
-  'therapist', 'social_worker', 'case_manager',
+  'dietitian', 'social_worker', 'case_manager',
   // Other/Unspecified
   'other'
 ]);

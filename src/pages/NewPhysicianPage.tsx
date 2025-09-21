@@ -51,6 +51,14 @@ const physicianFormSchema = z.object({
   fullLegalName: z.string(),
   dateOfBirth: z.string().optional(),
   gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  clinicianType: z.enum([
+    'md', 'do', 'pa', 'np', 'cnm', 'crna', 'cns', 'rn', 'lpn', 'lvn', 
+    'cna', 'na', 'ma', 'admin_staff', 'receptionist', 'billing_specialist',
+    'medical_technician', 'lab_technician', 'radiology_tech', 'pharmacist', 'dentist',
+    'optometrist', 'podiatrist', 'chiropractor', 'physical_therapist', 'occupational_therapist',
+    'speech_language_pathologist', 'respiratory_therapist', 'paramedic', 'emt',
+    'radiation_therapist', 'sonographer', 'dietitian', 'social_worker', 'case_manager', 'other'
+  ]).optional(),
   ssn: z.string().optional(),
   npi: z.string().optional(),
   tin: z.string().optional(),
@@ -92,6 +100,7 @@ export default function NewPhysicianPage() {
       npi: "",
       dateOfBirth: "",
       gender: undefined,
+      clinicianType: undefined,
       ssn: "",
       tin: "",
       deaNumber: "",
@@ -331,7 +340,7 @@ export default function NewPhysicianPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Gender</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger data-testid="select-gender">
                                     <SelectValue placeholder="Select gender" />
@@ -342,6 +351,62 @@ export default function NewPhysicianPage() {
                                   <SelectItem value="female">Female</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>
                                   <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="clinicianType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Clinician Type</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-clinician-type">
+                                    <SelectValue placeholder="Select clinician type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="md">Physician (MD)</SelectItem>
+                                  <SelectItem value="do">Physician (DO)</SelectItem>
+                                  <SelectItem value="pa">Physician Assistant (PA)</SelectItem>
+                                  <SelectItem value="np">Nurse Practitioner (NP)</SelectItem>
+                                  <SelectItem value="cnm">Certified Nurse Midwife (CNM)</SelectItem>
+                                  <SelectItem value="crna">Certified Registered Nurse Anesthetist (CRNA)</SelectItem>
+                                  <SelectItem value="cns">Clinical Nurse Specialist (CNS)</SelectItem>
+                                  <SelectItem value="rn">Registered Nurse (RN)</SelectItem>
+                                  <SelectItem value="lpn">Licensed Practical Nurse (LPN)</SelectItem>
+                                  <SelectItem value="lvn">Licensed Vocational Nurse (LVN)</SelectItem>
+                                  <SelectItem value="cna">Certified Nursing Assistant (CNA)</SelectItem>
+                                  <SelectItem value="na">Nursing Assistant (NA)</SelectItem>
+                                  <SelectItem value="ma">Medical Assistant (MA)</SelectItem>
+                                  <SelectItem value="admin_staff">Administrative Staff</SelectItem>
+                                  <SelectItem value="receptionist">Receptionist</SelectItem>
+                                  <SelectItem value="billing_specialist">Billing Specialist</SelectItem>
+                                  <SelectItem value="medical_technician">Medical Technician</SelectItem>
+                                  <SelectItem value="lab_technician">Lab Technician</SelectItem>
+                                  <SelectItem value="radiology_tech">Radiology Technician</SelectItem>
+                                  <SelectItem value="pharmacist">Pharmacist</SelectItem>
+                                  <SelectItem value="dentist">Dentist</SelectItem>
+                                  <SelectItem value="optometrist">Optometrist</SelectItem>
+                                  <SelectItem value="podiatrist">Podiatrist</SelectItem>
+                                  <SelectItem value="chiropractor">Chiropractor</SelectItem>
+                                  <SelectItem value="physical_therapist">Physical Therapist</SelectItem>
+                                  <SelectItem value="occupational_therapist">Occupational Therapist</SelectItem>
+                                  <SelectItem value="speech_language_pathologist">Speech-Language Pathologist</SelectItem>
+                                  <SelectItem value="respiratory_therapist">Respiratory Therapist</SelectItem>
+                                  <SelectItem value="paramedic">Paramedic</SelectItem>
+                                  <SelectItem value="emt">Emergency Medical Technician (EMT)</SelectItem>
+                                  <SelectItem value="radiation_therapist">Radiation Therapist</SelectItem>
+                                  <SelectItem value="sonographer">Sonographer</SelectItem>
+                                  <SelectItem value="dietitian">Dietitian</SelectItem>
+                                  <SelectItem value="social_worker">Social Worker</SelectItem>
+                                  <SelectItem value="case_manager">Case Manager</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
