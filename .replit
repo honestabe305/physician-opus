@@ -12,15 +12,10 @@ externalPort = 80
 localPort = 5001
 externalPort = 3000
 
-[[ports]]
-localPort = 44977
-externalPort = 3002
-
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start:prod"]
-ignorePorts = true
+run = ["sh", "-c", "npm run prod"]
 
 [agent]
 expertMode = true
