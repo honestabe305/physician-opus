@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,25 +43,17 @@ import {
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { insertPhysicianSchema, type InsertPhysician } from "../../shared/schema";
+import { insertPhysicianSchema, type InsertPhysician, type SelectPractice } from "../../shared/schema";
 import { z } from "zod";
 
 // Create a form schema based on the shared physician insert schema but with string fields for arrays
 const physicianFormSchema = insertPhysicianSchema.extend({
   // Override array fields to be strings in the form (will convert to arrays for API)
   phoneNumbers: z.string().optional(),
-  secondaryPracticeAddresses: z.string().optional(),
-  officePhone: z.string().optional(),
-  officeFax: z.string().optional(),
-  officeContactPerson: z.string().optional(),
-  groupNpi: z.string().optional(),
-  groupTaxId: z.string().optional(),
-  malpracticeCarrier: z.string().optional(),
-  malpracticePolicyNumber: z.string().optional(),
-  coverageLimits: z.string().optional(),
-  malpracticeExpirationDate: z.string().optional(),
-  status: z.string().optional(),
-  createdBy: z.string().optional(),
+  // Practice selection - either select existing or create new
+  practiceId: z.string().optional(),
+  createNewPractice: z.boolean().optional(),
+  newPracticeName: z.string().optional(),
 });
 
 type PhysicianFormData = z.infer<typeof physicianFormSchema>;
@@ -70,6 +62,11 @@ export default function NewPhysicianPage() {
   const [, setLocation] = useLocation();
   const [currentTab, setCurrentTab] = useState("demographics");
   const { toast } = useToast();
+
+  // Fetch practices for dropdown
+  const { data: practices = [] } = useQuery<SelectPractice[]>({
+    queryKey: ['/practices'],
+  });
 
   const form = useForm<PhysicianFormData>({
     resolver: zodResolver(physicianFormSchema),
@@ -87,31 +84,40 @@ export default function NewPhysicianPage() {
       homeAddress: "",
       mailingAddress: "",
       phoneNumbers: "",
-      practiceName: "",
-      primaryPracticeAddress: "",
-      secondaryPracticeAddresses: "",
-      officePhone: "",
-      officeFax: "",
-      officeContactPerson: "",
-      groupNpi: "",
-      groupTaxId: "",
-      malpracticeCarrier: "",
-      malpracticePolicyNumber: "",
-      coverageLimits: "",
+      practiceId: undefined,
+      createNewPractice: false,
+      newPracticeName: "",
       status: "active",
     },
   });
 
   const createPhysicianMutation = useMutation({
     mutationFn: async (data: PhysicianFormData) => {
+      let practiceId = data.practiceId;
+      
+      // Create new practice if requested
+      if (data.createNewPractice && data.newPracticeName) {
+        const newPractice = await apiRequest('/practices', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: data.newPracticeName,
+            isActive: true,
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        practiceId = newPractice.id;
+      }
+      
       // Transform form data to match API expectations
       const apiData = {
         ...data,
         phoneNumbers: data.phoneNumbers ? [data.phoneNumbers] : undefined,
-        secondaryPracticeAddresses: data.secondaryPracticeAddresses 
-          ? [data.secondaryPracticeAddresses] 
-          : undefined,
-        malpracticeExpirationDate: data.malpracticeExpirationDate || undefined,
+        practiceId: practiceId, // Explicitly set the computed practice ID
+        // Remove form-only fields
+        createNewPractice: undefined,
+        newPracticeName: undefined,
       };
       
       return apiRequest('/physicians', {
@@ -579,24 +585,72 @@ export default function NewPhysicianPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
                         <FormField
                           control={form.control}
-                          name="practiceName"
+                          name="practiceId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Practice/Facility Name *</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="Enter practice name"
-                                  data-testid="input-practice-name"
-                                  {...field} 
-                                />
-                              </FormControl>
+                              <FormLabel>Select Practice *</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-practice">
+                                    <SelectValue placeholder="Select practice" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {practices.map((practice) => (
+                                    <SelectItem key={practice.id} value={practice.id}>
+                                      {practice.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+
+                        <FormField
+                          control={form.control}
+                          name="createNewPractice"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                              <FormControl>
+                                <input
+                                  type="checkbox"
+                                  checked={field.value}
+                                  onChange={field.onChange}
+                                  data-testid="checkbox-create-new-practice"
+                                  className="h-4 w-4"
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal">
+                                Create new practice
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+
+                        {form.watch('createNewPractice') && (
+                          <FormField
+                            control={form.control}
+                            name="newPracticeName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>New Practice Name *</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="Enter new practice name"
+                                    data-testid="input-new-practice-name"
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
 
                         <FormField
                           control={form.control}
