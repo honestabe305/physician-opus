@@ -13,19 +13,15 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    // TEMP FIX: Skip authentication check for now to fix urgent issue
-    // TODO: Fix authentication cookie issue after page is working
-    const skipAuth = process.env.NODE_ENV === 'development';
-    
     // If not loading and not authenticated, redirect to login
-    if (!skipAuth && !isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       // Store the current location to redirect back after login
       const currentPath = location !== '/login' ? location : '/';
       setLocation(`/login?redirect=${encodeURIComponent(currentPath)}`);
     }
     
     // If user is authenticated but doesn't have required admin role
-    if (!skipAuth && !isLoading && isAuthenticated && requireAdmin && user?.role !== 'admin') {
+    if (!isLoading && isAuthenticated && requireAdmin && user?.role !== 'admin') {
       setLocation('/');
     }
   }, [isLoading, isAuthenticated, location, setLocation, requireAdmin, user]);
@@ -37,7 +33,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
 
   // If not authenticated, don't render children (will redirect in useEffect)
   if (!isAuthenticated) {
-    return <PageLoader />;
+    // Return null instead of PageLoader to avoid infinite loading
+    // The useEffect above will handle the redirect
+    return null;
   }
 
   // If requires admin and user is not admin, don't render
