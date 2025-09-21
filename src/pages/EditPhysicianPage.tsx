@@ -45,7 +45,7 @@ const editPhysicianSchema = z.object({
   phoneNumbers: z.string().optional(),
   mailingAddress: z.string().optional(),
   dateOfBirth: z.string().optional(),
-  gender: z.enum(["male", "female", "other", "prefer_not_to_say", ""]).optional(),
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say", "not_specified", ""]).optional(),
   practiceName: z.string().optional(),
   officePhone: z.string().optional(),
   primaryPracticeAddress: z.string().optional(),
@@ -123,7 +123,7 @@ export default function EditPhysicianPage() {
       phoneNumbers: "",
       mailingAddress: "",
       dateOfBirth: "",
-      gender: "",
+      gender: "not_specified",
       practiceName: "",
       officePhone: "",
       primaryPracticeAddress: "",
@@ -143,7 +143,7 @@ export default function EditPhysicianPage() {
           phoneNumbers: Array.isArray(physician.phoneNumbers) ? physician.phoneNumbers.join(", ") : "",
           mailingAddress: physician.mailingAddress || "",
           dateOfBirth: physician.dateOfBirth || "",
-          gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "") || "",
+          gender: (physician.gender as "male" | "female" | "other" | "prefer_not_to_say" | "not_specified" | "") || "not_specified",
           practiceName: physician.practiceName || "",
           officePhone: physician.officePhone || "",
           primaryPracticeAddress: physician.primaryPracticeAddress || "",
@@ -173,7 +173,7 @@ export default function EditPhysicianPage() {
         dateOfBirth: data.dateOfBirth || null,
         emailAddress: data.emailAddress || null,
         mailingAddress: data.mailingAddress || null,
-        gender: data.gender || null,
+        gender: (data.gender && data.gender !== "not_specified") ? data.gender : null,
         practiceName: data.practiceName || null,
         officePhone: data.officePhone || null,
         primaryPracticeAddress: data.primaryPracticeAddress || null,
@@ -418,7 +418,7 @@ export default function EditPhysicianPage() {
                             <SelectValue placeholder="Select gender" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Not specified</SelectItem>
+                            <SelectItem value="not_specified">Not specified</SelectItem>
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
