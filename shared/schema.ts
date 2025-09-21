@@ -109,6 +109,33 @@ export const profiles = pgTable('profiles', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// Practices table for normalized practice management
+export const practices = pgTable('practices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  primaryAddress: text('primary_address'),
+  secondaryAddresses: text('secondary_addresses').array(),
+  phone: text('phone'),
+  fax: text('fax'),
+  contactPerson: text('contact_person'),
+  email: text('email'),
+  website: text('website'),
+  
+  // Business identifiers
+  npi: text('npi').unique(),
+  taxId: text('tax_id'), // encrypted sensitive data
+  
+  // Organization details
+  practiceType: text('practice_type'), // 'solo', 'group', 'hospital', 'clinic', etc.
+  specialty: text('specialty'),
+  
+  // Status and metadata
+  isActive: boolean('is_active').notNull().default(true),
+  createdBy: uuid('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const userSettings = pgTable('user_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
@@ -169,15 +196,8 @@ export const physicians = pgTable('physicians', {
   emailAddress: text('email_address'),
   emergencyContact: jsonb('emergency_contact'), // {name, phone, relationship}
   
-  // Practice Information
-  practiceName: text('practice_name'),
-  primaryPracticeAddress: text('primary_practice_address'),
-  secondaryPracticeAddresses: text('secondary_practice_addresses').array(),
-  officePhone: text('office_phone'),
-  officeFax: text('office_fax'),
-  officeContactPerson: text('office_contact_person'),
-  groupNpi: text('group_npi'),
-  groupTaxId: text('group_tax_id'), // encrypted sensitive data
+  // Practice Information - normalized relationship
+  practiceId: uuid('practice_id').references(() => practices.id),
   
   // Insurance & Liability
   malpracticeCarrier: text('malpractice_carrier'),
@@ -421,6 +441,15 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
 });
 export type InsertProfile = typeof profiles.$inferInsert;
 export type SelectProfile = typeof profiles.$inferSelect;
+
+// Practice schemas and types
+export const insertPracticeSchema = createInsertSchema(practices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertPractice = typeof practices.$inferInsert;
+export type SelectPractice = typeof practices.$inferSelect;
 
 export const insertPhysicianSchema = createInsertSchema(physicians).omit({
   id: true,
