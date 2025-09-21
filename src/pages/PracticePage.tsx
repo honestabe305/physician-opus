@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +37,24 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Building2,
   Phone,
   Printer,
@@ -54,9 +75,30 @@ import {
   Calendar,
   DollarSign,
   Hash,
+  Plus,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { Link } from "wouter";
-import type { SelectPhysician } from "../../shared/schema";
+import type { SelectPhysician, SelectPractice, InsertPractice } from "../../shared/schema";
+import { insertPracticeSchema } from "../../shared/schema";
+import { z } from "zod";
+
+// Form schema for practice creation
+const practiceFormSchema = insertPracticeSchema.pick({
+  name: true,
+  primaryAddress: true,
+  phone: true,
+  fax: true,
+  contactPerson: true,
+  email: true,
+  website: true,
+  npi: true,
+  practiceType: true,
+  specialty: true,
+});
+
+type PracticeFormData = z.infer<typeof practiceFormSchema>;
 
 export default function PracticePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,6 +107,8 @@ export default function PracticePage() {
   const [insuranceFilter, setInsuranceFilter] = useState<string>("all");
   const [groupByPractice, setGroupByPractice] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const { toast } = useToast();
 
   // Debounce search term
   useEffect(() => {
@@ -84,6 +128,65 @@ export default function PracticePage() {
   });
 
   const physicians = physiciansData?.physicians || [];
+
+  // Fetch practices data
+  const { data: practices = [], isLoading: practicesLoading } = useQuery<SelectPractice[]>({
+    queryKey: ['/practices'],
+  });
+
+  // Practice creation form
+  const form = useForm<PracticeFormData>({
+    resolver: zodResolver(practiceFormSchema),
+    defaultValues: {
+      name: "",
+      primaryAddress: "",
+      phone: "",
+      fax: "",
+      contactPerson: "",
+      email: "",
+      website: "",
+      npi: "",
+      practiceType: "",
+      specialty: "",
+    },
+  });
+
+  // Practice creation mutation
+  const createPracticeMutation = useMutation({
+    mutationFn: async (data: PracticeFormData) => {
+      return apiRequest('/practices', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...data,
+          isActive: true,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Practice created successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/practices'] });
+      queryClient.invalidateQueries({ queryKey: ['/physicians'] });
+      setCreateDialogOpen(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create practice",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: PracticeFormData) => {
+    createPracticeMutation.mutate(data);
+  };
 
   // Calculate practice statistics
   const practiceStats = useMemo(() => {
@@ -255,6 +358,15 @@ export default function PracticePage() {
   // Stats cards configuration
   const stats = [
     {
+      title: "Total Practices",
+      value: practicesLoading ? "..." : practices.length.toString(),
+      change: "registered",
+      icon: Building2,
+      description: "All practices in system",
+      color: "text-green-500",
+      bgColor: "bg-green-50 dark:bg-green-950/20",
+    },
+    {
       title: "Total Physicians",
       value: isLoading ? "..." : practiceStats.total.toString(),
       change: "with practice info",
@@ -264,11 +376,11 @@ export default function PracticePage() {
       bgColor: "bg-blue-50 dark:bg-blue-950/20",
     },
     {
-      title: "Unique Practices",
+      title: "Assigned Practices",
       value: isLoading ? "..." : practiceStats.uniquePractices.toString(),
       change: "practices",
-      icon: Building2,
-      description: "Different practice locations",
+      icon: Building,
+      description: "Practices with physicians",
       color: "text-purple-500",
       bgColor: "bg-purple-50 dark:bg-purple-950/20",
     },
@@ -314,12 +426,238 @@ export default function PracticePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Building2 className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Practice Information</h1>
-          <p className="text-muted-foreground">Manage physician practice details and affiliations</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="page-title">Practice Information</h1>
+            <p className="text-muted-foreground">Manage physician practice details and affiliations</p>
+          </div>
         </div>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2" data-testid="button-create-practice">
+              <Plus className="h-4 w-4" />
+              Create Practice
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Create New Practice</DialogTitle>
+              <DialogDescription>
+                Add a new practice to the system. Only the practice name is required - other fields are optional.
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Practice Name *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter practice name"
+                            data-testid="input-practice-name"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="primaryAddress"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Primary Address</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter primary address"
+                            data-testid="input-primary-address"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="(555) 123-4567"
+                            data-testid="input-phone"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fax"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fax</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="(555) 123-4567"
+                            data-testid="input-fax"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="contactPerson"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contact Person</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Contact person name"
+                            data-testid="input-contact-person"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="contact@practice.com"
+                            data-testid="input-email"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="website"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Website</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="https://practice.com"
+                            data-testid="input-website"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="npi"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Group NPI</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="1234567890"
+                            data-testid="input-npi"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="practiceType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Practice Type</FormLabel>
+                        <FormControl>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <SelectTrigger data-testid="select-practice-type">
+                              <SelectValue placeholder="Select practice type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="solo">Solo Practice</SelectItem>
+                              <SelectItem value="group">Group Practice</SelectItem>
+                              <SelectItem value="hospital">Hospital</SelectItem>
+                              <SelectItem value="clinic">Clinic</SelectItem>
+                              <SelectItem value="urgent_care">Urgent Care</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="specialty"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Specialty</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., Family Medicine, Cardiology"
+                            data-testid="input-specialty"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCreateDialogOpen(false)}
+                    data-testid="button-cancel-practice"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createPracticeMutation.isPending}
+                    className="gap-2"
+                    data-testid="button-save-practice"
+                  >
+                    {createPracticeMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    {createPracticeMutation.isPending ? "Creating..." : "Create Practice"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Alert for expired malpractice insurance */}
