@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -43,7 +43,7 @@ import {
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { insertPhysicianSchema, type InsertPhysician, type SelectPractice } from "../../shared/schema";
+import { insertPhysicianSchema, type InsertPhysician, type SelectPractice, type SelectPhysician } from "../../shared/schema";
 import { z } from "zod";
 
 // Create a form schema based on the shared physician insert schema but with string fields for arrays
@@ -67,6 +67,43 @@ export default function NewPhysicianPage() {
   const { data: practices = [] } = useQuery<SelectPractice[]>({
     queryKey: ['/practices'],
   });
+
+  // Fetch physicians to calculate practice assignments
+  const { data: physiciansData } = useQuery({
+    queryKey: ['/physicians'],
+    queryFn: () => apiRequest('/physicians'),
+  });
+  const physicians = physiciansData?.physicians || [];
+
+  // Create enhanced practice list with physician counts and locations
+  const enrichedPractices = useMemo(() => {
+    const practicePhysicianCounts = new Map();
+    const practiceLocations = new Map();
+    
+    physicians.forEach((physician: SelectPhysician) => {
+      if (physician.practiceId) {
+        const count = practicePhysicianCounts.get(physician.practiceId) || 0;
+        practicePhysicianCounts.set(physician.practiceId, count + 1);
+        
+        // Extract location info from homeAddress
+        if (physician.homeAddress) {
+          const locations = practiceLocations.get(physician.practiceId) || new Set();
+          const parts = physician.homeAddress.split(',');
+          if (parts.length > 1) {
+            const state = parts[parts.length - 1].trim();
+            locations.add(state);
+            practiceLocations.set(physician.practiceId, locations);
+          }
+        }
+      }
+    });
+    
+    return practices.map(practice => ({
+      ...practice,
+      physicianCount: practicePhysicianCounts.get(practice.id) || 0,
+      locations: Array.from(practiceLocations.get(practice.id) || []),
+    }));
+  }, [practices, physicians]);
 
   const form = useForm<PhysicianFormData>({
     resolver: zodResolver(physicianFormSchema),
@@ -592,16 +629,48 @@ export default function NewPhysicianPage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Select Practice *</FormLabel>
+                              <FormDescription>
+                                Choose an existing practice to assign this physician to, or create a new one below.
+                              </FormDescription>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger data-testid="select-practice">
                                     <SelectValue placeholder="Select practice" />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
-                                  {practices.map((practice) => (
+                                <SelectContent className="max-h-60">
+                                  {enrichedPractices.map((practice) => (
                                     <SelectItem key={practice.id} value={practice.id}>
-                                      {practice.name}
+                                      <div className="flex flex-col gap-1 py-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">{practice.name}</span>
+                                          <Badge variant="outline" className="text-xs">
+                                            {practice.physicianCount} physicians
+                                          </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {practice.specialty && (
+                                            <span>{practice.specialty} • </span>
+                                          )}
+                                          {practice.primaryAddress ? (
+                                            practice.primaryAddress.length > 40 
+                                              ? `${practice.primaryAddress.substring(0, 40)}...`
+                                              : practice.primaryAddress
+                                          ) : 'No address specified'}
+                                        </div>
+                                        {practice.locations.length > 0 && (
+                                          <div className="flex gap-1 mt-1">
+                                            {practice.locations.slice(0, 3).map((location, idx) => (
+                                              <Badge key={idx} variant="secondary" className="text-xs px-1 py-0">
+                                                {location}
+                                              </Badge>
+                                            ))}
+                                            {practice.locations.length > 3 && (
+                                              <span className="text-xs text-muted-foreground">+{practice.locations.length - 3} more</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

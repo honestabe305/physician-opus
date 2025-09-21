@@ -83,6 +83,83 @@ import { Link } from "wouter";
 import type { SelectPhysician, SelectPractice, InsertPractice } from "../../shared/schema";
 import { insertPracticeSchema } from "../../shared/schema";
 import { z } from "zod";
+import { useMutation } from "@tanstack/react-query";
+import { PhysicianManagementDialogContent, PhysicianList } from "./PracticePage-components";
+
+// Practice Management Card Component
+interface PracticeManagementCardProps {
+  practice: {
+    id: string;
+    name: string;
+    primaryAddress?: string;
+    phone?: string;
+    specialty?: string;
+    physicianCount: number;
+    locations: string[];
+  };
+  onManagePhysicians: (practiceId: string) => void;
+}
+
+function PracticeManagementCard({ practice, onManagePhysicians }: PracticeManagementCardProps) {
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">{practice.name}</CardTitle>
+            <CardDescription className="flex items-center gap-1">
+              <Building className="h-3 w-3" />
+              {practice.specialty || 'General Practice'}
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="ml-2">
+            {practice.physicianCount} physicians
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {practice.primaryAddress && (
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span className="line-clamp-2">{practice.primaryAddress}</span>
+          </div>
+        )}
+        
+        {practice.phone && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Phone className="h-4 w-4" />
+            <span>{practice.phone}</span>
+          </div>
+        )}
+        
+        {practice.locations.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-muted-foreground">Geographic Coverage:</div>
+            <div className="flex flex-wrap gap-1">
+              {practice.locations.map((location, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {location}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div className="flex gap-2 pt-2">
+          <Button
+            onClick={() => onManagePhysicians(practice.id)}
+            size="sm"
+            className="flex-1"
+            data-testid={`button-manage-physicians-${practice.id}`}
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Manage Physicians
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Form schema for practice creation
 const practiceFormSchema = insertPracticeSchema.pick({
@@ -108,6 +185,10 @@ export default function PracticePage() {
   const [groupByPractice, setGroupByPractice] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [managePhysiciansDialogOpen, setManagePhysiciansDialogOpen] = useState(false);
+  const [selectedPracticeId, setSelectedPracticeId] = useState<string | null>(null);
+  const [selectedPhysicians, setSelectedPhysicians] = useState<Set<string>>(new Set());
+  const [locationFilter, setLocationFilter] = useState<string>('');
   const { toast } = useToast();
 
   // Debounce search term
@@ -184,6 +265,63 @@ export default function PracticePage() {
     },
   });
 
+  // Bulk physician assignment mutations
+  const bulkAssignMutation = useMutation({
+    mutationFn: async ({ practiceId, physicianIds }: { practiceId: string; physicianIds: string[] }) => {
+      return apiRequest(`/practices/${practiceId}/assign-physicians`, {
+        method: 'PUT',
+        body: JSON.stringify({ physicianIds }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Successfully assigned ${data.updatedPhysicians.length} physicians to practice`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/physicians'] });
+      queryClient.invalidateQueries({ queryKey: ['/practices'] });
+      setSelectedPhysicians(new Set());
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to assign physicians",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkUnassignMutation = useMutation({
+    mutationFn: async ({ practiceId, physicianIds }: { practiceId: string; physicianIds: string[] }) => {
+      return apiRequest(`/practices/${practiceId}/unassign-physicians`, {
+        method: 'PUT',
+        body: JSON.stringify({ physicianIds }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Successfully unassigned ${data.updatedPhysicians.length} physicians from practice`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/physicians'] });
+      queryClient.invalidateQueries({ queryKey: ['/practices'] });
+      setSelectedPhysicians(new Set());
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to unassign physicians",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: PracticeFormData) => {
     createPracticeMutation.mutate(data);
   };
@@ -250,6 +388,51 @@ export default function PracticePage() {
     });
     return Array.from(practices).sort();
   }, [physicians]);
+
+  // Create a map of practice names for quick lookup
+  const practiceMap = useMemo(() => {
+    const map = new Map();
+    practices.forEach(practice => {
+      map.set(practice.id, practice.name);
+    });
+    return map;
+  }, [practices]);
+
+  // Calculate practice statistics with enhanced data
+  const practiceMetrics = useMemo(() => {
+    const practicePhysicianCounts = new Map();
+    const practiceLocations = new Map();
+    
+    physicians.forEach((physician: SelectPhysician) => {
+      if (physician.practiceId) {
+        const count = practicePhysicianCounts.get(physician.practiceId) || 0;
+        practicePhysicianCounts.set(physician.practiceId, count + 1);
+        
+        // Extract state/location from homeAddress for geographical distribution
+        if (physician.homeAddress) {
+          const locations = practiceLocations.get(physician.practiceId) || new Set();
+          // Simple state extraction - assume last part after comma is state
+          const parts = physician.homeAddress.split(',');
+          if (parts.length > 1) {
+            const state = parts[parts.length - 1].trim();
+            locations.add(state);
+            practiceLocations.set(physician.practiceId, locations);
+          }
+        }
+      }
+    });
+    
+    return { practicePhysicianCounts, practiceLocations };
+  }, [physicians]);
+
+  // Enhanced practice data with physician counts and locations
+  const enrichedPractices = useMemo(() => {
+    return practices.map(practice => ({
+      ...practice,
+      physicianCount: practiceMetrics.practicePhysicianCounts.get(practice.id) || 0,
+      locations: Array.from(practiceMetrics.practiceLocations.get(practice.id) || []),
+    }));
+  }, [practices, practiceMetrics]);
 
   // Filter physicians based on search and filters
   const filteredPhysicians = useMemo(() => {
@@ -670,6 +853,47 @@ export default function PracticePage() {
         </Alert>
       )}
 
+      {/* Practice Management Toggle */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant={!groupByPractice ? "default" : "outline"}
+            onClick={() => setGroupByPractice(false)}
+            data-testid="button-physician-view"
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Physician View
+          </Button>
+          <Button
+            variant={groupByPractice ? "default" : "outline"}
+            onClick={() => setGroupByPractice(true)}
+            data-testid="button-practice-view"
+          >
+            <Building className="h-4 w-4 mr-2" />
+            Practice Management
+          </Button>
+        </div>
+      </div>
+
+      {/* Practice Management Cards - Only show when in practice view */}
+      {groupByPractice && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Practice Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {enrichedPractices.map((practice) => (
+              <PracticeManagementCard
+                key={practice.id}
+                practice={practice}
+                onManagePhysicians={(practiceId) => {
+                  setSelectedPracticeId(practiceId);
+                  setManagePhysiciansDialogOpen(true);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
@@ -829,7 +1053,16 @@ export default function PracticePage() {
                                     </Button>
                                   </Link>
                                 </TableCell>
-                                <TableCell>{physician.practiceId ? 'Practice Assigned' : 'N/A'}</TableCell>
+                                <TableCell>
+                              {physician.practiceId ? (
+                                <div className="flex items-center gap-2">
+                                  <Building className="h-4 w-4 text-muted-foreground" />
+                                  <span>{practiceMap.get(physician.practiceId) || 'Unknown Practice'}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">No Practice Assigned</span>
+                              )}
+                            </TableCell>
                                 <TableCell>
                                   <TooltipProvider>
                                     <Tooltip>
@@ -1007,7 +1240,16 @@ export default function PracticePage() {
                                 </Button>
                               </Link>
                             </TableCell>
-                            <TableCell>{physician.practiceId ? 'Practice Assigned' : 'N/A'}</TableCell>
+                            <TableCell>
+                              {physician.practiceId ? (
+                                <div className="flex items-center gap-2">
+                                  <Building className="h-4 w-4 text-muted-foreground" />
+                                  <span>{practiceMap.get(physician.practiceId) || 'Unknown Practice'}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">No Practice Assigned</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <TooltipProvider>
                                 <Tooltip>
@@ -1167,5 +1409,42 @@ export default function PracticePage() {
         </CardContent>
       </Card>
     </div>
+
+    {/* Physician Management Dialog */}
+    <Dialog open={managePhysiciansDialogOpen} onOpenChange={setManagePhysiciansDialogOpen}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Manage Physicians - {selectedPracticeId ? practiceMap.get(selectedPracticeId) : 'Practice'}</DialogTitle>
+          <DialogDescription>
+            Assign or unassign physicians to this practice. Use location filtering to find physicians from specific areas.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <PhysicianManagementDialogContent
+          practiceId={selectedPracticeId}
+          physicians={physicians}
+          practiceMap={practiceMap}
+          selectedPhysicians={selectedPhysicians}
+          setSelectedPhysicians={setSelectedPhysicians}
+          locationFilter={locationFilter}
+          setLocationFilter={setLocationFilter}
+          onBulkAssign={(physicianIds) => {
+            if (selectedPracticeId) {
+              bulkAssignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
+            }
+          }}
+          onBulkUnassign={(physicianIds) => {
+            if (selectedPracticeId) {
+              bulkUnassignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
+            }
+          }}
+          isAssigning={bulkAssignMutation.isPending}
+          isUnassigning={bulkUnassignMutation.isPending}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
+
+// Import the component definitions to make them available
+// (The actual component implementations are in PracticePage-components.tsx for organization)

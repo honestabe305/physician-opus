@@ -845,6 +845,191 @@ router.delete('/practices/:id', asyncHandler(async (req: any, res: any) => {
   res.status(204).send();
 }));
 
+// Validation schema for physician assignment operations
+const physicianAssignmentSchema = z.object({
+  physicianIds: z.array(z.string().uuid('Invalid physician ID format'))
+});
+
+// Bulk physician assignment to practice
+router.put('/practices/:id/assign-physicians', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body
+    const { physicianIds } = physicianAssignmentSchema.parse(req.body);
+    
+    const practiceId = req.params.id;
+    
+    // Verify practice exists
+    const practice = await storage.getPractice(practiceId);
+    if (!practice) {
+      return res.status(404).json({ error: 'Practice not found' });
+    }
+    
+    const results = [];
+    
+    // Process each physician assignment
+    for (const physicianId of physicianIds) {
+      try {
+        // Verify physician exists
+        const existingPhysician = await storage.getPhysician(physicianId);
+        if (!existingPhysician) {
+          results.push({
+            physicianId,
+            success: false,
+            error: 'Physician not found'
+          });
+          continue;
+        }
+        
+        // Update physician's practice assignment
+        const physician = await storage.updatePhysician(physicianId, { practiceId });
+        results.push({
+          physicianId,
+          success: true,
+          physician
+        });
+      } catch (error) {
+        console.error(`Failed to assign physician ${physicianId} to practice ${practiceId}:`, error);
+        results.push({
+          physicianId,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    res.json({ 
+      message: `Successfully assigned ${successCount} physicians to practice. ${failureCount} failed.`,
+      results,
+      summary: {
+        total: physicianIds.length,
+        successful: successCount,
+        failed: failureCount
+      }
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    console.error('Error in assign-physicians:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}));
+
+// Bulk physician removal from practice
+router.put('/practices/:id/unassign-physicians', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body
+    const { physicianIds } = physicianAssignmentSchema.parse(req.body);
+    
+    const results = [];
+    
+    // Process each physician unassignment
+    for (const physicianId of physicianIds) {
+      try {
+        // Verify physician exists
+        const existingPhysician = await storage.getPhysician(physicianId);
+        if (!existingPhysician) {
+          results.push({
+            physicianId,
+            success: false,
+            error: 'Physician not found'
+          });
+          continue;
+        }
+        
+        // Remove practice assignment from physician
+        const physician = await storage.updatePhysician(physicianId, { practiceId: null });
+        results.push({
+          physicianId,
+          success: true,
+          physician
+        });
+      } catch (error) {
+        console.error(`Failed to unassign physician ${physicianId} from practice:`, error);
+        results.push({
+          physicianId,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    res.json({ 
+      message: `Successfully unassigned ${successCount} physicians from practice. ${failureCount} failed.`,
+      results,
+      summary: {
+        total: physicianIds.length,
+        successful: successCount,
+        failed: failureCount
+      }
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Validation error',
+        details: error.errors 
+      });
+    }
+    console.error('Error in unassign-physicians:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}));
+
+// Get available physicians for assignment (not assigned to any practice or with location filter)
+router.get('/practices/:id/available-physicians', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { location, search } = req.query;
+    const practiceId = req.params.id;
+    
+    // Verify practice exists
+    const practice = await storage.getPractice(practiceId);
+    if (!practice) {
+      return res.status(404).json({ error: 'Practice not found' });
+    }
+    
+    let physicians: SelectPhysician[];
+    
+    if (search) {
+      physicians = await storage.searchPhysicians(search as string);
+    } else {
+      physicians = await storage.getAllPhysicians();
+    }
+    
+    // Filter out physicians already assigned to THIS practice
+    physicians = physicians.filter(physician => physician.practiceId !== practiceId);
+    
+    // Filter by location if specified (assuming homeAddress contains location info)
+    if (location) {
+      physicians = physicians.filter(physician => 
+        physician.homeAddress && 
+        physician.homeAddress.toLowerCase().includes((location as string).toLowerCase())
+      );
+    }
+    
+    res.json({
+      physicians,
+      total: physicians.length,
+      practiceId,
+      filters: {
+        location: location || null,
+        search: search || null
+      }
+    });
+  } catch (error) {
+    console.error('Error in available-physicians:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}));
+
 // Physician routes
 router.post('/physicians', asyncHandler(async (req: any, res: any) => {
   const validatedData = insertPhysicianSchema.parse(req.body);
