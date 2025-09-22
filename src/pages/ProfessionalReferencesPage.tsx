@@ -130,18 +130,14 @@ export default function ProfessionalReferencesPage() {
   const { toast } = useToast();
 
   // Fetch professional references
-  const { data: referencesResponse, isLoading, error, refetch } = useQuery({
+  const { data: references, isLoading, error, refetch } = useQuery<ProfessionalReference[]>({
     queryKey: ['/api/professional-references'],
   });
-  
-  const references = referencesResponse?.data || [];
 
   // Fetch physicians for dropdown
-  const { data: physiciansResponse } = useQuery({
+  const { data: physicians } = useQuery<SelectPhysician[]>({
     queryKey: ['/api/physicians'],
   });
-  
-  const physicians = physiciansResponse?.data || [];
 
   // Create form
   const createForm = useForm<ProfessionalReferenceFormData>({
@@ -251,12 +247,12 @@ export default function ProfessionalReferencesPage() {
   });
 
   // Filter references based on search
-  const filteredReferences = references?.filter(reference =>
+  const filteredReferences = (references || []).filter(reference =>
     reference.referenceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reference.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
     reference.referenceTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (reference.physicianName && reference.physicianName.toLowerCase().includes(searchTerm.toLowerCase()))
-  ) || [];
+  );
 
   const handleEdit = (reference: ProfessionalReference) => {
     setSelectedReference(reference);
@@ -525,12 +521,12 @@ export default function ProfessionalReferencesPage() {
                             className="h-8"
                           />
                         </div>
-                        {physicians?.length === 0 ? (
+                        {!physicians || physicians.length === 0 ? (
                           <SelectItem value="no-physicians" disabled>
                             No physicians available
                           </SelectItem>
                         ) : (
-                          physicians?.map((physician) => (
+                          physicians.map((physician) => (
                             <SelectItem key={physician.id} value={physician.id}>
                               <div className="flex flex-col gap-1 py-1">
                                 <div className="font-medium">{physician.fullLegalName}</div>
