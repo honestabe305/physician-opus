@@ -69,7 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<Date | null>(null);
   const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number | null>(null);
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
+  // Removed pendingRedirect to simplify auth flow
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -159,9 +159,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
-        // Set pending redirect - will be handled by useEffect after user state is updated
-        const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
-        setPendingRedirect(redirectTo);
+        // Handle redirect immediately after login with security validation
+        const rawRedirect = new URLSearchParams(window.location.search).get('redirect');
+        const redirectTo = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/';
+        // Use a microtask to ensure state is updated first
+        Promise.resolve().then(() => {
+          setLocation(redirectTo);
+        });
         
         toast({
           title: "Login successful",
@@ -214,8 +218,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
-        // Set pending redirect for dashboard - will be handled by useEffect after user state is updated
-        setPendingRedirect('/');
+        // Redirect to dashboard after signup (always safe)
+        Promise.resolve().then(() => {
+          setLocation('/');
+        });
         
         toast({
           title: "Account created successfully",
@@ -420,17 +426,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [sessionExpiresAt, user, logout, sessionWarningActive]);
 
-  // Handle pending redirects after user state is updated
-  useEffect(() => {
-    if (user && pendingRedirect && !isLoading) {
-      // User is authenticated and we have a pending redirect
-      // Use setTimeout to ensure redirect happens after current render cycle
-      setTimeout(() => {
-        setLocation(pendingRedirect);
-        setPendingRedirect(null); // Clear the pending redirect
-      }, 0);
-    }
-  }, [user, pendingRedirect, isLoading, setLocation]);
+  // Removed complex pending redirect logic to prevent hook dependency cycles
 
   const value: AuthContextType = {
     user,

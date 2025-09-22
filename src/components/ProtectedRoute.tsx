@@ -17,7 +17,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
     if (!isLoading && !isAuthenticated) {
       // Store the current location to redirect back after login
       const currentPath = location !== '/login' ? location : '/';
-      setLocation(`/login?redirect=${encodeURIComponent(currentPath)}`);
+      // Use correct single encoding to handle paths with query parameters
+      const redirectPath = currentPath === '/' ? '' : currentPath;
+      setLocation(`/login${redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : ''}`);
     }
     
     // If user is authenticated but doesn't have required admin role
