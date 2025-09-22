@@ -8,18 +8,31 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ||
 export async function apiRequest(url: string, options: RequestInit = {}) {
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
   
+  // Check if body is FormData - if so, don't set Content-Type (let browser set it with boundary)
+  const isFormData = options.body instanceof FormData;
+  
   const config: RequestInit = {
     headers: {
-      'Content-Type': 'application/json',
+      // Only set Content-Type for JSON, let browser handle FormData headers
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
     credentials: 'include', // Include authentication cookies
     ...options,
   };
 
-  // Add body if it's not a GET request and body is provided
-  if (options.body && typeof options.body === 'object') {
-    config.body = JSON.stringify(options.body);
+  // Handle body based on type
+  if (options.body) {
+    if (isFormData) {
+      // FormData - pass through as-is
+      config.body = options.body;
+    } else if (typeof options.body === 'object') {
+      // JSON object - stringify it
+      config.body = JSON.stringify(options.body);
+    } else {
+      // String or other - pass through as-is  
+      config.body = options.body;
+    }
   }
 
   const response = await fetch(fullUrl, config);

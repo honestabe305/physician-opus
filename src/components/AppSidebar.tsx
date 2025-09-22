@@ -68,7 +68,7 @@ const navigation = [
       { title: "Enrollments", url: "/payer-enrollment/enrollments", icon: Workflow },
       { title: "Payers", url: "/payer-enrollment/payers", icon: Building2 },
       { title: "Practice Locations", url: "/payer-enrollment/practice-locations", icon: MapPin },
-      { title: "Banking Information", url: "/payer-enrollment/banking", icon: CreditCard },
+      { title: "Practice Documents", url: "/payer-enrollment/banking", icon: FileText },
       { title: "Professional References", url: "/payer-enrollment/references", icon: UserCheck },
     ]
   },
