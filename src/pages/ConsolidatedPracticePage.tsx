@@ -50,7 +50,7 @@ export default function ConsolidatedPracticePage({ defaultTab = "info" }: Consol
   // Update URL when tab changes using wouter
   const handleTabChange = (tab: string) => {
     if (tab === 'info') {
-      setLocation('/practices', { replace: true });
+      setLocation('/practices?section=info', { replace: true });
     } else {
       setLocation(`/practices?section=${tab}`, { replace: true });
     }
