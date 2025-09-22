@@ -24,6 +24,7 @@ const SearchPage = lazy(() => import("./pages/SearchPage"));
 const DemographicsPage = lazy(() => import("./pages/DemographicsPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const PracticePage = lazy(() => import("./pages/PracticePage"));
+const ConsolidatedPracticePage = lazy(() => import("./pages/ConsolidatedPracticePage"));
 const LicensurePage = lazy(() => import("./pages/LicensurePage"));
 const EducationPage = lazy(() => import("./pages/EducationPage"));
 const WorkHistoryPage = lazy(() => import("./pages/WorkHistoryPage"));
@@ -77,7 +78,8 @@ const App = () => (
                               <Route path="/search" component={SearchPage} />
                               <Route path="/demographics" component={DemographicsPage} />
                               <Route path="/contact" component={ContactPage} />
-                              <Route path="/practice" component={PracticePage} />
+                              <Route path="/practices" component={ConsolidatedPracticePage} />
+                              <Route path="/practice" render={() => { window.location.replace('/practices?section=info'); return null; }} />
                               <Route path="/licensure" component={LicensurePage} />
                               <Route path="/dea-csr" component={DeaCsrDashboardPage} />
                               <Route path="/education" component={EducationPage} />
@@ -93,7 +95,7 @@ const App = () => (
                               {/* Payer Enrollment Routes */}
                               <Route path="/payer-enrollment" component={PayerEnrollmentDashboard} />
                               <Route path="/payer-enrollment/payers" component={PayersPage} />
-                              <Route path="/payer-enrollment/practice-locations" component={PracticeLocationsPage} />
+                              <Route path="/payer-enrollment/practice-locations" render={() => { window.location.replace('/practices?section=locations'); return null; }} />
                               <Route path="/payer-enrollment/banking" component={ProviderBankingPage} />
                               <Route path="/payer-enrollment/references" component={ProfessionalReferencesPage} />
                               <Route path="/payer-enrollment/enrollments" component={PayerEnrollmentsPage} />
