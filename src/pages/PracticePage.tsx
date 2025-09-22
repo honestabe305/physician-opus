@@ -83,7 +83,6 @@ import { Link } from "wouter";
 import type { SelectPhysician, SelectPractice, InsertPractice } from "../../shared/schema";
 import { insertPracticeSchema } from "../../shared/schema";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
 import { PhysicianManagementDialogContent, PhysicianList } from "./PracticePage-components";
 
 // Practice Management Card Component
@@ -1408,41 +1407,41 @@ export default function PracticePage() {
           )}
         </CardContent>
       </Card>
-    </div>
 
-    {/* Physician Management Dialog */}
-    <Dialog open={managePhysiciansDialogOpen} onOpenChange={setManagePhysiciansDialogOpen}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Manage Physicians - {selectedPracticeId ? practiceMap.get(selectedPracticeId) : 'Practice'}</DialogTitle>
-          <DialogDescription>
-            Assign or unassign physicians to this practice. Use location filtering to find physicians from specific areas.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <PhysicianManagementDialogContent
-          practiceId={selectedPracticeId}
-          physicians={physicians}
-          practiceMap={practiceMap}
-          selectedPhysicians={selectedPhysicians}
-          setSelectedPhysicians={setSelectedPhysicians}
-          locationFilter={locationFilter}
-          setLocationFilter={setLocationFilter}
-          onBulkAssign={(physicianIds) => {
-            if (selectedPracticeId) {
-              bulkAssignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
-            }
-          }}
-          onBulkUnassign={(physicianIds) => {
-            if (selectedPracticeId) {
-              bulkUnassignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
-            }
-          }}
-          isAssigning={bulkAssignMutation.isPending}
-          isUnassigning={bulkUnassignMutation.isPending}
-        />
-      </DialogContent>
-    </Dialog>
+      {/* Physician Management Dialog */}
+      <Dialog open={managePhysiciansDialogOpen} onOpenChange={setManagePhysiciansDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manage Physicians - {selectedPracticeId ? practiceMap.get(selectedPracticeId) : 'Practice'}</DialogTitle>
+            <DialogDescription>
+              Assign or unassign physicians to this practice. Use location filtering to find physicians from specific areas.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <PhysicianManagementDialogContent
+            practiceId={selectedPracticeId}
+            physicians={physicians}
+            practiceMap={practiceMap}
+            selectedPhysicians={selectedPhysicians}
+            setSelectedPhysicians={setSelectedPhysicians}
+            locationFilter={locationFilter}
+            setLocationFilter={setLocationFilter}
+            onBulkAssign={(physicianIds) => {
+              if (selectedPracticeId) {
+                bulkAssignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
+              }
+            }}
+            onBulkUnassign={(physicianIds) => {
+              if (selectedPracticeId) {
+                bulkUnassignMutation.mutate({ practiceId: selectedPracticeId, physicianIds });
+              }
+            }}
+            isAssigning={bulkAssignMutation.isPending}
+            isUnassigning={bulkUnassignMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
