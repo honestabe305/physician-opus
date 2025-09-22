@@ -1,4 +1,5 @@
 import { eq, like, ilike, and, or, sql, lt } from 'drizzle-orm';
+import { encrypt, decrypt, redactBankingData, validatePrivilegedAccess, decryptBankingData, migrateBankingDataEncryption } from './utils/encryption';
 import {
   users,
   sessions,
@@ -294,8 +295,12 @@ export interface IStorage {
 
   // Provider Banking operations
   createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking>;
+  // SECURE DEFAULT: These methods return redacted data by default
   getProviderBanking(id: string): Promise<SelectProviderBanking | null>;
   getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null>;
+  // PRIVILEGED ACCESS: These methods require role validation and return decrypted data
+  getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null>;
+  getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null>;
   updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking>;
   deleteProviderBanking(id: string): Promise<void>;
 
@@ -2504,28 +2509,61 @@ export class PostgreSQLStorage implements IStorage {
   async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
     try {
       const db = await this.getDb();
-      const [result] = await db.insert(providerBanking).values(banking).returning();
+      
+      // Encrypt sensitive fields before storage using enhanced encryption
+      const encryptedBanking = {
+        ...banking,
+        routingNumber: banking.routingNumber ? encrypt(banking.routingNumber, { dataType: 'banking' }) : banking.routingNumber,
+        accountNumber: banking.accountNumber ? encrypt(banking.accountNumber, { dataType: 'banking' }) : banking.accountNumber
+      };
+      
+      const [result] = await db.insert(providerBanking).values(encryptedBanking).returning();
       if (!result) {
         throw new Error('Failed to create provider banking');
       }
-      return result;
+      
+      // Return redacted data by default for security
+      return redactBankingData(result);
     } catch (error) {
       console.error('Error creating provider banking:', error);
       throw new Error(`Failed to create provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
+  // SECURE DEFAULT: Returns redacted banking data
   async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
     try {
       const db = await this.getDb();
       const [result] = await db.select().from(providerBanking).where(eq(providerBanking.id, id));
-      return result || null;
+      if (!result) return null;
+      
+      // Return redacted version for secure display (default behavior)
+      return redactBankingData(result);
     } catch (error) {
-      console.error('Error getting provider banking:', error);
+      console.error('Error getting provider banking (redacted):', error);
       throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
+  // PRIVILEGED ACCESS: Returns decrypted banking data with role validation
+  async getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
+    try {
+      // Validate privileged access
+      validatePrivilegedAccess(userId, role, 'getProviderBankingDecrypted');
+      
+      const db = await this.getDb();
+      const [result] = await db.select().from(providerBanking).where(eq(providerBanking.id, id));
+      if (!result) return null;
+      
+      // Decrypt sensitive fields for privileged access
+      return decryptBankingData(result, { userId, role, autoMigrate: true });
+    } catch (error) {
+      console.error('Error getting provider banking (decrypted):', error);
+      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // SECURE DEFAULT: Returns redacted banking data by physician
   async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
     try {
       const db = await this.getDb();
@@ -2535,9 +2573,35 @@ export class PostgreSQLStorage implements IStorage {
           eq(providerBanking.isActive, true)
         )
       );
-      return result || null;
+      if (!result) return null;
+      
+      // Return redacted version for secure display (default behavior)
+      return redactBankingData(result);
     } catch (error) {
-      console.error('Error getting provider banking by physician:', error);
+      console.error('Error getting provider banking by physician (redacted):', error);
+      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // PRIVILEGED ACCESS: Returns decrypted banking data by physician with role validation
+  async getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
+    try {
+      // Validate privileged access
+      validatePrivilegedAccess(userId, role, 'getProviderBankingByPhysicianDecrypted');
+      
+      const db = await this.getDb();
+      const [result] = await db.select().from(providerBanking).where(
+        and(
+          eq(providerBanking.physicianId, physicianId),
+          eq(providerBanking.isActive, true)
+        )
+      );
+      if (!result) return null;
+      
+      // Decrypt sensitive fields for privileged access
+      return decryptBankingData(result, { userId, role, autoMigrate: true });
+    } catch (error) {
+      console.error('Error getting provider banking by physician (decrypted):', error);
       throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -2545,21 +2609,39 @@ export class PostgreSQLStorage implements IStorage {
   async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
     try {
       const db = await this.getDb();
+      
+      // Encrypt sensitive fields if they're being updated using enhanced encryption
+      const encryptedUpdates = {
+        ...updates,
+        updatedAt: new Date()
+      };
+      
+      if (updates.routingNumber !== undefined) {
+        encryptedUpdates.routingNumber = updates.routingNumber ? encrypt(updates.routingNumber, { dataType: 'banking' }) : updates.routingNumber;
+      }
+      if (updates.accountNumber !== undefined) {
+        encryptedUpdates.accountNumber = updates.accountNumber ? encrypt(updates.accountNumber, { dataType: 'banking' }) : updates.accountNumber;
+      }
+      
       const [result] = await db
         .update(providerBanking)
-        .set({ ...updates, updatedAt: new Date() })
+        .set(encryptedUpdates)
         .where(eq(providerBanking.id, id))
         .returning();
       
       if (!result) {
         throw new Error('Provider banking not found');
       }
-      return result;
+      
+      // Return redacted data by default for security
+      return redactBankingData(result);
     } catch (error) {
       console.error('Error updating provider banking:', error);
       throw new Error(`Failed to update provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+
 
   async deleteProviderBanking(id: string): Promise<void> {
     try {
@@ -2568,6 +2650,24 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting provider banking:', error);
       throw new Error(`Failed to delete provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Helper method to decrypt sensitive banking data fields
+   */
+  private decryptBankingData(banking: SelectProviderBanking): SelectProviderBanking {
+    try {
+      return {
+        ...banking,
+        routingNumber: banking.routingNumber ? decrypt(banking.routingNumber) : banking.routingNumber,
+        accountNumber: banking.accountNumber ? decrypt(banking.accountNumber) : banking.accountNumber
+      };
+    } catch (error) {
+      console.error('Error decrypting banking data - data may be corrupted or using old encryption:', error);
+      // For backward compatibility, if decryption fails, return original data
+      // In production, you might want to handle this differently
+      return banking;
     }
   }
 
@@ -2838,7 +2938,7 @@ export class PostgreSQLStorage implements IStorage {
         this.getDeaRegistrationsByPhysician(physicianId),
         this.getCsrLicensesByPhysician(physicianId),
         this.getLicenseDocumentsByPhysician(physicianId),
-        this.getProviderBankingByPhysician(physicianId),
+        this.getProviderBanking ? await this.getProviderBanking((await this.getPhysician(physicianId))?.id || '') : null,
         this.getProfessionalReferencesByPhysician(physicianId),
         this.getPayerEnrollmentsByPhysician(physicianId)
       ]);

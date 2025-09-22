@@ -1,4 +1,5 @@
 import type { IStorage } from './storage';
+import { encrypt, decrypt, redactBankingData, validatePrivilegedAccess, decryptBankingData, migrateBankingDataEncryption } from './utils/encryption';
 import {
   type SelectUser,
   type InsertUser,
@@ -1109,47 +1110,124 @@ export class MemoryStorage implements IStorage {
 
   // Provider Banking operations
   async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
+    // Encrypt sensitive fields before storage using enhanced encryption
+    const encryptedBanking = {
+      ...banking,
+      routingNumber: banking.routingNumber ? encrypt(banking.routingNumber, { dataType: 'banking' }) : banking.routingNumber,
+      accountNumber: banking.accountNumber ? encrypt(banking.accountNumber, { dataType: 'banking' }) : banking.accountNumber
+    };
+    
     const newBanking: SelectProviderBanking = {
       id: this.generateId(),
-      physicianId: banking.physicianId,
-      bankName: banking.bankName,
-      routingNumber: banking.routingNumber,
-      accountNumber: banking.accountNumber,
-      accountType: banking.accountType ?? 'checking',
-      eftEnabled: banking.eftEnabled ?? false,
-      eraEnabled: banking.eraEnabled ?? false,
-      voidCheckUrl: banking.voidCheckUrl ?? null,
-      bankLetterUrl: banking.bankLetterUrl ?? null,
-      isActive: banking.isActive ?? true,
+      physicianId: encryptedBanking.physicianId,
+      bankName: encryptedBanking.bankName,
+      routingNumber: encryptedBanking.routingNumber,
+      accountNumber: encryptedBanking.accountNumber,
+      accountType: encryptedBanking.accountType ?? 'checking',
+      eftEnabled: encryptedBanking.eftEnabled ?? false,
+      eraEnabled: encryptedBanking.eraEnabled ?? false,
+      voidCheckUrl: encryptedBanking.voidCheckUrl ?? null,
+      bankLetterUrl: encryptedBanking.bankLetterUrl ?? null,
+      isActive: encryptedBanking.isActive ?? true,
       createdAt: new Date(),
       updatedAt: new Date()
     };
     this.providerBanking.push(newBanking);
-    return newBanking;
+    
+    // Return redacted data by default for security
+    return redactBankingData(newBanking);
   }
 
+  // SECURE DEFAULT: Returns redacted banking data
   async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
-    return this.providerBanking.find(b => b.id === id) || null;
+    const result = this.providerBanking.find(b => b.id === id) || null;
+    if (!result) return null;
+    
+    // Return redacted version for secure display (default behavior)
+    return redactBankingData(result);
   }
 
+  // PRIVILEGED ACCESS: Returns decrypted banking data with role validation
+  async getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
+    // Validate privileged access
+    validatePrivilegedAccess(userId, role, 'getProviderBankingDecrypted');
+    
+    const result = this.providerBanking.find(b => b.id === id) || null;
+    if (!result) return null;
+    
+    // Decrypt sensitive fields for privileged access
+    return decryptBankingData(result, { userId, role, autoMigrate: true });
+  }
+
+  // SECURE DEFAULT: Returns redacted banking data by physician
   async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
-    return this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
+    const result = this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
+    if (!result) return null;
+    
+    // Return redacted version for secure display (default behavior)
+    return redactBankingData(result);
+  }
+
+  // PRIVILEGED ACCESS: Returns decrypted banking data by physician with role validation
+  async getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
+    // Validate privileged access
+    validatePrivilegedAccess(userId, role, 'getProviderBankingByPhysicianDecrypted');
+    
+    const result = this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
+    if (!result) return null;
+    
+    // Decrypt sensitive fields for privileged access
+    return decryptBankingData(result, { userId, role, autoMigrate: true });
   }
 
   async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
     const index = this.providerBanking.findIndex(b => b.id === id);
     if (index === -1) throw new Error('Provider banking not found');
     
-    this.providerBanking[index] = {
-      ...this.providerBanking[index],
+    // Encrypt sensitive fields if they're being updated using enhanced encryption
+    const encryptedUpdates = {
       ...updates,
       updatedAt: new Date()
     };
-    return this.providerBanking[index];
+    
+    if (updates.routingNumber !== undefined) {
+      encryptedUpdates.routingNumber = updates.routingNumber ? encrypt(updates.routingNumber, { dataType: 'banking' }) : updates.routingNumber;
+    }
+    if (updates.accountNumber !== undefined) {
+      encryptedUpdates.accountNumber = updates.accountNumber ? encrypt(updates.accountNumber, { dataType: 'banking' }) : updates.accountNumber;
+    }
+    
+    this.providerBanking[index] = {
+      ...this.providerBanking[index],
+      ...encryptedUpdates
+    };
+    
+    // Return redacted data by default for security
+    return redactBankingData(this.providerBanking[index]);
   }
+
+
 
   async deleteProviderBanking(id: string): Promise<void> {
     this.providerBanking = this.providerBanking.filter(b => b.id !== id);
+  }
+
+  /**
+   * Helper method to decrypt sensitive banking data fields
+   */
+  private decryptBankingData(banking: SelectProviderBanking): SelectProviderBanking {
+    try {
+      return {
+        ...banking,
+        routingNumber: banking.routingNumber ? decrypt(banking.routingNumber) : banking.routingNumber,
+        accountNumber: banking.accountNumber ? decrypt(banking.accountNumber) : banking.accountNumber
+      };
+    } catch (error) {
+      console.error('Error decrypting banking data - data may be corrupted or using old encryption:', error);
+      // For backward compatibility, if decryption fails, return original data
+      // In production, you might want to handle this differently
+      return banking;
+    }
   }
 
   // Professional Reference operations
