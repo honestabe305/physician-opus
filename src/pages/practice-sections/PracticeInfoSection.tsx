@@ -58,10 +58,9 @@ interface PracticeManagementCardProps {
     physicianCount: number;
     locations: string[];
   };
-  onManagePhysicians: (practiceId: string) => void;
 }
 
-function PracticeManagementCard({ practice, onManagePhysicians }: PracticeManagementCardProps) {
+function PracticeManagementCard({ practice }: PracticeManagementCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow" data-testid={`card-practice-${practice.id}`}>
       <CardHeader className="pb-3">
@@ -106,16 +105,8 @@ function PracticeManagementCard({ practice, onManagePhysicians }: PracticeManage
           </div>
         )}
         
-        <div className="flex gap-2 pt-2">
-          <Button
-            onClick={() => onManagePhysicians(practice.id)}
-            size="sm"
-            className="flex-1"
-            data-testid={`button-manage-physicians-${practice.id}`}
-          >
-            <Users className="h-4 w-4 mr-2" />
-            Manage Physicians
-          </Button>
+        <div className="pt-2 text-xs text-muted-foreground">
+          Practice management details
         </div>
       </CardContent>
     </Card>
@@ -123,17 +114,17 @@ function PracticeManagementCard({ practice, onManagePhysicians }: PracticeManage
 }
 
 // Form schema for practice creation
-const practiceFormSchema = insertPracticeSchema.pick({
-  name: true,
-  primaryAddress: true,
-  phone: true,
-  fax: true,
-  contactPerson: true,
-  email: true,
-  website: true,
-  npi: true,
-  practiceType: true,
-  specialty: true,
+const practiceFormSchema = z.object({
+  name: z.string().min(1, "Practice name is required"),
+  primaryAddress: z.string().optional(),
+  phone: z.string().optional(),
+  fax: z.string().optional(),
+  contactPerson: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  website: z.string().url().optional().or(z.literal("")),
+  npi: z.string().optional(),
+  practiceType: z.string().optional(),
+  specialty: z.string().optional(),
 });
 
 type PracticeFormData = z.infer<typeof practiceFormSchema>;
@@ -146,8 +137,6 @@ interface PracticeInfoSectionProps {
 
 export function PracticeInfoSection({ practices, searchTerm, onRefresh }: PracticeInfoSectionProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [managePhysiciansDialogOpen, setManagePhysiciansDialogOpen] = useState(false);
-  const [selectedPracticeId, setSelectedPracticeId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch physicians data for practice assignments
@@ -257,10 +246,6 @@ export function PracticeInfoSection({ practices, searchTerm, onRefresh }: Practi
     );
   }, [enrichedPractices, searchTerm]);
 
-  const handleManagePhysicians = (practiceId: string) => {
-    setSelectedPracticeId(practiceId);
-    setManagePhysiciansDialogOpen(true);
-  };
 
   return (
     <div className="space-y-6">
@@ -483,7 +468,6 @@ export function PracticeInfoSection({ practices, searchTerm, onRefresh }: Practi
           <PracticeManagementCard
             key={practice.id}
             practice={practice}
-            onManagePhysicians={handleManagePhysicians}
           />
         ))}
       </div>
@@ -503,20 +487,7 @@ export function PracticeInfoSection({ practices, searchTerm, onRefresh }: Practi
         </div>
       )}
       
-      {/* Physician Management Dialog - Placeholder for now */}
-      <Dialog open={managePhysiciansDialogOpen} onOpenChange={setManagePhysiciansDialogOpen}>
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>Manage Practice Physicians</DialogTitle>
-            <DialogDescription>
-              Assign or unassign physicians to this practice.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-center py-8 text-muted-foreground">
-            Physician management functionality coming soon...
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Placeholder physician management dialog removed */}
     </div>
   );
 }
