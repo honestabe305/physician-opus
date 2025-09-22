@@ -87,6 +87,49 @@ The system is designed to handle various medical documents:
 - **Analytics endpoints** for status summaries and expiration reporting
 - **Dashboard metrics** for system overview and compliance tracking
 
+### Automated Renewal Workflow System
+PhysicianCRM includes an intelligent automated renewal workflow system that proactively manages license and certification renewals:
+
+#### How It Works
+- **Automatic Detection**: The system continuously monitors all physician licenses, DEA registrations, and CSR licenses for upcoming expirations
+- **Smart Workflow Creation**: Every 6 hours, the system automatically creates renewal workflows for any credentials expiring within 90 days
+- **Duplicate Prevention**: The system prevents duplicate workflows by checking for existing active renewal processes before creating new ones
+- **Multi-Credential Support**: Handles physician licenses, DEA registrations, and CSR licenses with credential-specific renewal requirements
+
+#### Background Processing
+- **Scheduled Jobs**: Runs automatically every 6 hours without user intervention
+- **Comprehensive Scanning**: Processes all 220+ physicians and their 770+ credentials during each scan
+- **Error Handling**: Robust error handling ensures individual failures don't stop the entire process
+- **Audit Trail**: Complete logging of all automatic workflow creation activities
+
+#### Workflow Lifecycle
+1. **Automatic Creation**: System identifies expiring credentials and creates renewal workflows
+2. **Notification Generation**: Generates alerts at 90, 60, 30, 7, and 1 days before expiration
+3. **Progress Tracking**: Tracks renewal progress through statuses: not_started → in_progress → filed → under_review → approved/rejected
+4. **Checklist Management**: Provides credential-specific checklists (CME requirements, fees, documentation, etc.)
+5. **Auto-Expiration**: Automatically marks workflows as expired if renewal isn't completed by the expiration date
+
+#### User Benefits
+- **Proactive Management**: No manual monitoring needed - the system automatically identifies renewal needs
+- **Early Warning System**: Receive notifications well in advance of expiration deadlines
+- **Streamlined Process**: Pre-configured checklists and timelines for each renewal type
+- **Compliance Assurance**: Ensures no credentials expire unnoticed, maintaining provider compliance
+- **Dashboard Integration**: Real-time renewal statistics and upcoming renewal counts displayed on the main dashboard
+
+#### Technical Implementation
+- **Background Scheduler**: Uses NodeJS intervals to run automated jobs every 6 hours
+- **Database Integration**: Directly integrates with physician licenses, DEA registrations, and CSR licenses tables
+- **Service Architecture**: Modular renewal service with comprehensive error handling and logging
+- **Scalable Design**: Efficiently processes large datasets without performance impact
+
+#### Renewal Statistics Available
+- Total active renewal workflows
+- Workflows in progress, pending review, completed, and expired
+- Upcoming renewals in 30, 60, and 90-day timeframes
+- Success rates and completion metrics
+
+The automated renewal workflow system transforms manual credential tracking into a proactive, automated process that ensures no renewals are missed while providing comprehensive visibility into the renewal pipeline.
+
 ### Performance and Scalability
 - **Connection pooling** with Neon serverless database
 - **Query optimization** with Drizzle ORM
