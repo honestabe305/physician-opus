@@ -32,6 +32,7 @@ interface Notification {
   timestamp: Date;
   read: boolean;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  backendData?: any;
 }
 
 // Mock notifications data - in a real app, this would come from an API
@@ -152,10 +153,14 @@ export function NotificationsDropdown({ hasEnabledNotifications, getEnabledCount
   const notifications: Notification[] = backendNotifications.map(notification => ({
     id: notification.id,
     type: notification.type === 'license' ? 'license_expiring' : 
+          notification.type === 'dea' ? 'license_expiring' :
+          notification.type === 'csr' ? 'license_expiring' :
           notification.type === 'document' ? 'document_required' :
           notification.type === 'profile' ? 'profile_incomplete' :
           notification.type === 'approval' ? 'approval_needed' : 'system_alert',
     title: notification.type === 'license' ? 'License Expiring Soon' :
+           notification.type === 'dea' ? 'DEA Registration Expiring' :
+           notification.type === 'csr' ? 'CSR License Expiring' :
            notification.type === 'document' ? 'Document Upload Required' :
            notification.type === 'profile' ? 'Profile Incomplete' :
            notification.type === 'approval' ? 'Approval Required' : 'System Alert',
@@ -164,7 +169,9 @@ export function NotificationsDropdown({ hasEnabledNotifications, getEnabledCount
     read: notification.sentStatus === 'read',
     priority: notification.severity === 'critical' ? 'urgent' :
               notification.severity === 'warning' ? 'high' :
-              notification.severity === 'info' ? 'medium' : 'low'
+              notification.severity === 'info' ? 'medium' : 'low',
+    // Store backend data for navigation
+    backendData: notification
   }));
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -238,25 +245,44 @@ export function NotificationsDropdown({ hasEnabledNotifications, getEnabledCount
           <ScrollArea className="h-80">
             <div className="space-y-1">
               {notifications.map((notification) => {
-                // Determine the link based on notification type
-                const getNotificationLink = (type: Notification['type']) => {
-                  switch (type) {
-                    case 'license_expiring':
-                      return '/licensure';
-                    case 'document_required':
-                      return '/documents';
-                    case 'profile_incomplete':
-                      return '/physicians';
-                    case 'approval_needed':
-                      return '/physicians?status=pending';
-                    case 'system_alert':
-                      return '/settings';
-                    default:
-                      return '#';
+                // Generate specific navigation URL based on backend data
+                const getNotificationLink = (notification: Notification): string => {
+                  if (!notification.backendData) {
+                    // Fallback for generic notifications
+                    switch (notification.type) {
+                      case 'license_expiring':
+                        return '/licensure';
+                      case 'document_required':
+                        return '/documents';
+                      case 'profile_incomplete':
+                        return '/physicians';
+                      case 'approval_needed':
+                        return '/physicians?status=pending';
+                      case 'system_alert':
+                        return '/settings';
+                      default:
+                        return '#';
+                    }
                   }
+                  
+                  const { physicianId, type, entityId } = notification.backendData;
+                  if (physicianId) {
+                    switch (type) {
+                      case 'license':
+                        return `/physicians/${physicianId}?tab=licenses&highlight=${entityId}`;
+                      case 'dea':
+                        return `/physicians/${physicianId}?tab=dea&highlight=${entityId}`;
+                      case 'csr':
+                        return `/physicians/${physicianId}?tab=csr&highlight=${entityId}`;
+                      default:
+                        return `/physicians/${physicianId}`;
+                    }
+                  }
+                  
+                  return '/physicians';
                 };
                 
-                const notificationLink = getNotificationLink(notification.type);
+                const notificationLink = getNotificationLink(notification);
                 
                 const handleClick = () => {
                   markAsRead(notification.id);

@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, AlertTriangle, Info, Bell, Calendar, MapPin, FileText } from "lucide-react";
+import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, differenceInDays } from "date-fns";
 
@@ -64,12 +65,37 @@ export function NotificationPanel() {
     }
   };
 
+  const getNotificationHref = (notification: Notification): string => {
+    const { physicianId, type, entityId } = notification;
+    switch (type) {
+      case 'license':
+        return `/physicians/${physicianId}?tab=licenses&highlight=${entityId}`;
+      case 'dea':
+        return `/physicians/${physicianId}?tab=dea&highlight=${entityId}`;
+      case 'csr':
+        return `/physicians/${physicianId}?tab=csr&highlight=${entityId}`;
+      default:
+        return `/physicians/${physicianId}`;
+    }
+  };
+
   const NotificationCard = ({ notification }: { notification: Notification }) => {
     const daysUntilExpiry = differenceInDays(new Date(notification.expirationDate), new Date());
     const isUnread = notification.sentStatus !== 'read';
 
+    const handleCardClick = () => {
+      if (isUnread) {
+        markAsRead(notification.id);
+      }
+    };
+
     return (
-      <Alert variant={getAlertVariant(notification.severity)} className={`mb-3 ${isUnread ? 'border-2' : ''}`}>
+      <Link href={getNotificationHref(notification)} onClick={handleCardClick}>
+        <Alert 
+          variant={getAlertVariant(notification.severity)} 
+          className={`mb-3 cursor-pointer hover:bg-muted/30 transition-colors ${isUnread ? 'border-2' : ''}`}
+          data-testid={`notification-card-${notification.id}`}
+        >
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
             {getIcon(notification.severity)}
@@ -112,7 +138,8 @@ export function NotificationPanel() {
             </Button>
           )}
         </div>
-      </Alert>
+        </Alert>
+      </Link>
     );
   };
 
