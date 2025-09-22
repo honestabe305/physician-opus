@@ -1073,7 +1073,6 @@ export class PostgreSQLStorage implements IStorage {
           or(
             ilike(physicians.fullLegalName, `%${searchQuery}%`),
             like(physicians.npi, `%${searchQuery}%`),
-            ilike(physicians.practiceName, `%${searchQuery}%`),
             ilike(physicians.emailAddress, `%${searchQuery}%`)
           )
         );
@@ -1108,7 +1107,6 @@ export class PostgreSQLStorage implements IStorage {
           or(
             ilike(physicians.fullLegalName, `%${searchQuery}%`),
             like(physicians.npi, `%${searchQuery}%`),
-            ilike(physicians.practiceName, `%${searchQuery}%`),
             ilike(physicians.emailAddress, `%${searchQuery}%`)
           )
         );
