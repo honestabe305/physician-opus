@@ -1,4 +1,4 @@
-import { boolean, date, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, date, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar, check, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -144,7 +144,14 @@ export const practices = pgTable('practices', {
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  phoneFormat: check('phone_format', sql`phone IS NULL OR phone ~ '^[\+]?[1-9][\d]{1,14}$'`),
+  faxFormat: check('fax_format', sql`fax IS NULL OR fax ~ '^[\+]?[1-9][\d]{1,14}$'`),
+  emailFormat: check('email_format', sql`email IS NULL OR email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'`),
+  websiteFormat: check('website_format', sql`website IS NULL OR website ~ '^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$'`),
+  npiFormat: check('npi_format', sql`npi IS NULL OR (length(npi) = 10 AND npi ~ '^[0-9]{10}$')`)
+}));
 
 export const userSettings = pgTable('user_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -429,14 +436,21 @@ export const payers = pgTable('payers', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
   linesOfBusiness: lineOfBusinessEnum('lines_of_business').array().notNull(),
-  reCredentialingCadence: integer('re_credentialing_cadence').default(36), // months
+  reCredentialingCadence: integer('re_credentialing_cadence').notNull().default(36), // months
   requiredFields: jsonb('required_fields'), // Specific fields required by this payer
   contactInfo: jsonb('contact_info'), // Phone, email, website
   notes: text('notes'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  nameNotEmpty: check('name_not_empty', sql`length(trim(name)) > 0`),
+  reCredentialingCadenceValid: check('re_credentialing_cadence_valid', sql`re_credentialing_cadence > 0 AND re_credentialing_cadence <= 120`),
+  linesOfBusinessNotEmpty: check('lines_of_business_not_empty', sql`array_length(lines_of_business, 1) > 0`),
+  // Note: Business logic should enforce unique active payer names
+  // This would require application-level validation due to Drizzle limitations
+}));
 
 // Practice Locations table for enrollment per location
 export const practiceLocations = pgTable('practice_locations', {
@@ -448,9 +462,9 @@ export const practiceLocations = pgTable('practice_locations', {
   streetAddress1: text('street_address_1').notNull(),
   streetAddress2: text('street_address_2'),
   city: text('city').notNull(),
-  state: text('state').notNull(),
-  zipCode: text('zip_code').notNull(),
-  zip4: text('zip_4'), // ZIP+4 extension
+  state: text('state', { length: 2 }).notNull(),
+  zipCode: text('zip_code', { length: 5 }).notNull(),
+  zip4: text('zip_4', { length: 4 }), // ZIP+4 extension
   county: text('county'),
   
   // Contact information
@@ -466,7 +480,18 @@ export const practiceLocations = pgTable('practice_locations', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  phoneFormat: check('phone_format', sql`phone IS NULL OR phone ~ '^[\+]?[1-9][\d]{1,14}$'`),
+  faxFormat: check('fax_format', sql`fax IS NULL OR fax ~ '^[\+]?[1-9][\d]{1,14}$'`),
+  emailFormat: check('email_format', sql`email IS NULL OR email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'`),
+  stateFormat: check('state_format', sql`length(state) = 2 AND state ~ '^[A-Z]{2}$'`),
+  zipCodeFormat: check('zip_code_format', sql`length(zip_code) = 5 AND zip_code ~ '^[0-9]{5}$'`),
+  zip4Format: check('zip4_format', sql`zip_4 IS NULL OR (length(zip_4) = 4 AND zip_4 ~ '^[0-9]{4}$')`),
+  locationNameNotEmpty: check('location_name_not_empty', sql`length(trim(location_name)) > 0`),
+  cityNotEmpty: check('city_not_empty', sql`length(trim(city)) > 0`),
+  streetAddress1NotEmpty: check('street_address_1_not_empty', sql`length(trim(street_address_1)) > 0`)
+}));
 
 // Banking/EFT information for providers
 export const providerBanking = pgTable('provider_banking', {
@@ -475,9 +500,9 @@ export const providerBanking = pgTable('provider_banking', {
   
   // Banking details (encrypted sensitive data)
   bankName: text('bank_name').notNull(),
-  routingNumber: text('routing_number').notNull(), // encrypted
+  routingNumber: text('routing_number', { length: 9 }).notNull(), // encrypted
   accountNumber: text('account_number').notNull(), // encrypted
-  accountType: text('account_type').default('checking'), // checking/savings
+  accountType: text('account_type').notNull().default('checking'), // checking/savings
   
   // EFT/ERA preferences
   eftEnabled: boolean('eft_enabled').notNull().default(false),
@@ -490,7 +515,15 @@ export const providerBanking = pgTable('provider_banking', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  bankNameNotEmpty: check('bank_name_not_empty', sql`length(trim(bank_name)) > 0`),
+  accountTypeValid: check('account_type_valid', sql`account_type IN ('checking', 'savings', 'business_checking', 'business_savings')`),
+  urlFormat: check('void_check_url_format', sql`void_check_url IS NULL OR void_check_url ~ '^https?:\/\/'`),
+  bankLetterUrlFormat: check('bank_letter_url_format', sql`bank_letter_url IS NULL OR bank_letter_url ~ '^https?:\/\/'`),
+  // Note: Business logic should enforce one active banking record per physician
+  // This would require application-level validation due to Drizzle limitations
+}));
 
 // Professional References table
 export const professionalReferences = pgTable('professional_references', {
@@ -507,7 +540,15 @@ export const professionalReferences = pgTable('professional_references', {
   
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  referenceNameNotEmpty: check('reference_name_not_empty', sql`length(trim(reference_name)) > 0`),
+  phoneFormat: check('phone_format', sql`phone ~ '^[\+]?[1-9][\d]{1,14}$'`),
+  emailFormat: check('email_format', sql`email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'`),
+  yearsKnownPositive: check('years_known_positive', sql`years_known IS NULL OR years_known >= 0`),
+  yearsKnownRealistic: check('years_known_realistic', sql`years_known IS NULL OR years_known <= 70`),
+  relationshipValid: check('relationship_valid', sql`relationship IS NULL OR relationship IN ('colleague', 'supervisor', 'mentor', 'coworker', 'other')`)
+}));
 
 // Payer Enrollments table - core enrollment tracking
 export const payerEnrollments = pgTable('payer_enrollments', {
@@ -557,7 +598,29 @@ export const payerEnrollments = pgTable('payer_enrollments', {
   updatedBy: uuid('updated_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // CHECK constraints for data integrity
+  linesOfBusinessNotEmpty: check('lines_of_business_not_empty', sql`array_length(lines_of_business, 1) > 0`),
+  progressPercentageValid: check('progress_percentage_valid', sql`progress_percentage >= 0 AND progress_percentage <= 100`),
+  npiUsedFormat: check('npi_used_format', sql`npi_used IS NULL OR (length(npi_used) = 10 AND npi_used ~ '^[0-9]{10}$')`),
+  
+  // Date validation constraints
+  effectiveBeforeRevalidation: check('effective_before_revalidation', sql`revalidation_date IS NULL OR effective_date IS NULL OR effective_date <= revalidation_date`),
+  effectiveBeforeReCredentialing: check('effective_before_re_credentialing', sql`re_credentialing_date IS NULL OR effective_date IS NULL OR effective_date <= re_credentialing_date`),
+  submittedBeforeApproved: check('submitted_before_approved', sql`approved_date IS NULL OR submitted_date IS NULL OR submitted_date <= approved_date`),
+  approvedBeforeStopped: check('approved_before_stopped', sql`stopped_date IS NULL OR approved_date IS NULL OR approved_date <= stopped_date`),
+  
+  // Business rule constraints
+  stoppedReasonWhenStopped: check('stopped_reason_when_stopped', sql`(enrollment_status != 'stopped') OR (stopped_reason IS NOT NULL AND length(trim(stopped_reason)) > 0)`),
+  providerIdWhenActive: check('provider_id_when_active', sql`(enrollment_status NOT IN ('active', 'approved')) OR (provider_id IS NOT NULL AND length(trim(provider_id)) > 0)`),
+  
+  // URL format validation
+  approvalLetterUrlFormat: check('approval_letter_url_format', sql`approval_letter_url IS NULL OR approval_letter_url ~ '^https?:\/\/'`),
+  welcomeLetterUrlFormat: check('welcome_letter_url_format', sql`welcome_letter_url IS NULL OR welcome_letter_url ~ '^https?:\/\/'`),
+  
+  // Unique constraint: one active enrollment per physician-payer-location combination
+  uniqueActiveEnrollment: unique('unique_active_enrollment').on(table.physicianId, table.payerId, table.practiceLocationId)
+}));
 
 // Insert Schemas and Types
 
