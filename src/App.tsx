@@ -35,6 +35,7 @@ const DocumentManagementPage = lazy(() => import("./pages/DocumentManagementPage
 const RenewalWorkflowPage = lazy(() => import("./pages/RenewalWorkflowPage"));
 const AnalyticsDashboardPage = lazy(() => import("./pages/AnalyticsDashboardPage"));
 const DeaCsrDashboardPage = lazy(() => import("./pages/DeaCsrDashboardPage"));
+const HelpDocumentationPage = lazy(() => import("./pages/HelpDocumentationPage"));
 
 
 const App = () => (
@@ -78,6 +79,7 @@ const App = () => (
                               <Route path="/document-management/:physicianId" component={DocumentManagementPage} />
                               <Route path="/renewal-workflows" component={RenewalWorkflowPage} />
                               <Route path="/analytics" component={AnalyticsDashboardPage} />
+                              <Route path="/help" component={HelpDocumentationPage} />
                               <Route path="/settings" component={SettingsPage} />
                               <Route component={NotFound} />
                             </Switch>

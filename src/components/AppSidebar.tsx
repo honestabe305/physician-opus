@@ -11,7 +11,8 @@ import {
   Building2,
   GraduationCap,
   LogOut,
-  RefreshCcw
+  RefreshCcw,
+  HelpCircle
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDisplayName, getInitials, getUserRole, getUserEmail } from "@/lib/user-display-utils";
@@ -61,6 +62,7 @@ const navigation = [
     items: [
       { title: "Documents", url: "/documents", icon: FileText },
       { title: "Document Management", url: "/document-management", icon: Shield },
+      { title: "Help & Documentation", url: "/help", icon: HelpCircle },
       { title: "Settings", url: "/settings", icon: Settings },
     ]
   }
