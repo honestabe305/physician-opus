@@ -1,0 +1,110 @@
+Category	CAQH Fields (ProView)	Payer Enrollment (Medicare/Medicaid/Commercial)	Doc Upload Needed?	Sensitive?
+Personal/Demographics	Name, DOB, Gender, SSN, Citizenship, Home Address, Email, Phone	Same, plus sometimes ethnicity (state Medicaid)	Driver’s license, SS card	✅
+Professional IDs	NPI, DEA, State Licenses, UPIN, Medicare/Medicaid IDs	Same, but payers also want Tax ID (TIN/EIN)	DEA cert, License copies, W-9	✅
+Practice Info	Practice Name, Address, Group NPI, Contact Person	Same + billing address, EFT/ACH details	W-9, Voided check for EFT	✅
+Education/Training	Med School, Residency, Fellowship, CME	Same	Diploma, Residency/Fellowship certs	–
+Work History	5–10 years employment, gaps explained	Same + Hospital Privileges	Hospital privilege letter	–
+Board Certifications	Specialty boards & expiration	Same	Board cert copy	–
+Malpractice / Liability	Carrier, Policy #, Expiration, Coverage Limits	Same	Malpractice insurance face sheet	–
+Disclosures	Licensure sanctions, malpractice history, Medicare/Medicaid sanctions	Same	NPDB self-query	✅
+References	3–5 professional references	Required by many payers	–	–
+Attachments	CV (signed/dated)	Always required	CV PDF	–
+Attestation	Electronic signature, date (renew every 120 days)	Each payer requires signature page	E-signature or wet signature	–
+Banking (for EFT/ERA)	Not collected by CAQH	Payers require EFT enrollment: bank name, routing, account #	Voided check, bank letter	✅
+🔹 Additional Payer-Only Fields (not in CAQH)
+
+Tax ID / EIN (entity enrollment)
+
+EFT/ERA banking details (sensitive)
+
+Specialty taxonomy code (billing classification)
+
+Provider type (physician, NP, PA, etc.)
+
+Provider availability (hours of operation)
+
+Medicaid provider type (if applicable by state)
+
+Medicare reassignment of benefits (CMS-855R form)
+
+🔹 Recommended Database Tables
+
+To support both CAQH + payer enrollment, design at least these tables:
+
+Clinicians
+
+clinician_id (PK)
+
+name, dob, gender, ssn (encrypted), citizenship
+
+npi, taxonomy_code
+
+Licenses
+
+license_id, clinician_id (FK)
+
+state, number, expiration, type
+
+document_url
+
+Practice Locations
+
+location_id, clinician_id (FK)
+
+name, address, billing_address, contact
+
+eft_enabled (Y/N)
+
+Education/Training
+
+edu_id, clinician_id (FK)
+
+type (med_school/residency/fellowship), institution, years
+
+document_url
+
+Employment/Privileges
+
+employment_id, clinician_id (FK)
+
+hospital/organization, dates, role
+
+privilege_letter_url
+
+Board Certifications
+
+board_id, clinician_id (FK)
+
+board_name, specialty, expiration
+
+certificate_url
+
+Insurance/Malpractice
+
+policy_id, clinician_id (FK)
+
+carrier, policy_number, coverage_limits, expiration
+
+document_url
+
+Disclosures
+
+disclosure_id, clinician_id (FK)
+
+type (malpractice, sanction, exclusion), details
+
+supporting_doc_url
+
+Banking (for EFT/ERA)
+
+eft_id, clinician_id (FK)
+
+bank_name, routing_number, account_number (encrypted)
+
+void_check_url
+
+References
+
+ref_id, clinician_id (FK)
+
+name, title, phone, email

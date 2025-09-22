@@ -1,0 +1,231 @@
+Core data model (CAQH-aligned)
+
+Organization (Group)
+
+Legal/DBA name, Tax ID (EIN), Group NPI
+
+Incorporation details (state, date, entity type)
+
+Mailing + physical address
+
+Banking artifacts: IRS CP-575/147C, W-9, bank letter (file uploads + versioning)
+
+Group officials (name, role, contact)
+
+Practice locations (see UI requirements below) and count of linked providers per location
+
+Provider
+
+Demographics/PII: full name, aliases, DOB, SSN (secure), contact info, citizenship, languages, gender
+
+Provider types & practice settings (enum: MD/DO/PA/NP/etc.; telemedicine/clinic/hospital, etc.)
+
+Primary state + additional states
+
+Identifiers: Individual NPI, taxonomy code(s) (multi) with authoritative lookup and search
+
+Professional IDs
+
+State licenses (multi-state): number, state, status, issue/exp dates, class, board/agency, documents
+
+DEA: number, schedules, registered address, exp date, document
+
+State Controlled Substance (CDS/SDSI) where applicable: number, state, exp date, document
+
+ECFMG (required if IMG), USMLE (optional/rare), ECFMG/USMLE docs
+
+Medicare/Medicaid provider numbers not here (store per-payer enrollment below)
+
+Education & Training
+
+Medical school, internship, residency(ies), fellowship(s)
+
+Month + Year (no day) for start/end
+
+Specialty at each program + affiliated university hospital
+
+Diploma/cert uploads
+
+Work history (last 5 years)
+
+Month/Year start–end, employer, role, location
+
+Gap explanations with attachment support
+
+Hospital admitting privileges / arrangements
+
+Hospital, privilege type, status, effective/expiration, contact, letter upload
+
+Liability insurance
+
+Carrier name, policy #, effective/expiration, limits, certificate upload
+
+External accounts (restricted)
+
+CAQH ProView ID (tokenized access if you integrate later)
+
+Do not store PECOS/NPPES logins; capture consent + policy acknowledgement instead
+
+Practice locations (Medallion-style, not radio-list)
+
+Locations displayed as expandable cards/rows with:
+
+Full address fields: street 1/2, ZIP+4, city, county, state, phone, fax
+
+Hours, place type (clinic, telemed hub), notes
+
+Validation: USPS autocomplete, ZIP+4 and county auto-lookup
+
+Provider ↔ location linking UI (must link before payer enrollment to satisfy “apply per location per state” logic).
+
+Payer enrollment module (front-page usability fixes)
+
+Payer list grid per provider (and group roll-up) with:
+
+Payer name, practice location (spelled out, not just a link), lines of business (HMO/PPO/Medicare Advantage/etc.)
+
+Provider ID, PAR status, effective date, re-credentialing/revalidation date
+
+Status bar (blue → in process, green → approved, red → stopped/denied) with timestamped stage changes
+
+Inline icons to indicate “proof of enrollment uploaded”, “portal update pending”, “data incomplete”
+
+Quick filters: status, location, payer, line of business, due in next 30/60/90 days
+
+Enrollment record detail
+
+Fields: practice location, line(s) of business, network, TIN/NPI used, provider ID, PAR status, effective date, revalidation/re-cred date, contacts
+
+Uploads: approval letter, welcome letter, screenshots, ticket/confirmation numbers
+
+Notes with timeline & @mentions; show latest 1–2 notes on the list row (no deep-dive required)
+
+Stateful workflow
+
+Stages: Discovery → Data Complete → Submitted → Payer Processing → Approved → Active (or Stopped/Denied with reason)
+
+Auto-advance rules: when Provider ID + Effective Date saved or “proof of enrollment” uploaded → mark Approved/Active with date stamp
+
+“Stopped” requires reason + date; display stopped date on the row (as in transcript)
+
+Multi-state Medicare handling
+
+Allow multiple Medicare enrollments per provider across states with unique IDs/effective dates
+
+Navigation & UX
+
+Dual navigation (as shown): left-hand jump menu for major sections + top tabs for scope-specific views
+
+Top tabs: Overview | Provider Data | IDs | Education/Training | Work History | Privileges | Liability | Payers | Documents | Audit
+
+Section jump links on each page
+
+Month/Year date pickers everywhere dates don’t need days (education, work history)
+
+“Quick snapshot” surfaces on payer list (ID/effective/re-cred date on the row; no digging into notes)
+
+Provider and group dashboards
+
+Cards: Group NPI, EIN, # Practices, # Providers
+
+“What’s due soon” (re-credentialing, license/DEA/CDS expirations, malpractice renewal)
+
+“What moved” (recent approvals, submissions, stops)
+
+Documents & evidence (group + provider)
+
+Central document repository with types, tags (year, payer, location), versioning
+
+Show historical artifacts per group (W-9s, bank letters, IRS, approval letters) and per provider (licenses, ECFMG, etc.)
+
+Evidence linking: documents can be attached to enrollment, license, privilege, education, or group level
+
+Bulk upload + drag-to-relate to entities; duplicate detection
+
+Reporting & analytics (replace the “reports that suck”)
+
+Operational
+
+Re-credentialing calendar/report (by payer, location, provider; next 30/60/90 days)
+
+Enrollment pipeline & cycle time (by payer, location, state; stage durations; SLA trends)
+
+License/DEA/CDS expiration matrix with auto reminders
+
+Work history completeness, gap explanations missing
+
+Hospital privileges and malpractice coverage completeness
+
+Throughput charts
+
+New enrollments per month; approvals per month; average days from “Data Complete” → “Approved”
+
+“Aging by status” bar chart
+
+Exports & subscriptions
+
+CSV/XLSX exports with saved filters
+
+Email/PDF scheduled reports for clients
+
+Drill-through
+
+From charts to filtered tables (e.g., click “aging >60 days” to see those enrollments)
+
+Data quality & validation
+
+ZIP+4 + county enforcement on practice addresses
+
+Required fields per section with contextual requirements (e.g., ECFMG required if foreign grad)
+
+Duplicate detection (provider by NPI, license by state+number, enrollment by payer+location)
+
+Field masks (policy #, DEA), date logic (end ≥ start), status reason requirements
+
+“Medicare/Medicaid numbers belong to payer enrollment records, not Professional IDs”
+
+Compliance, roles & audit
+
+Role-based access control (RBA): restrict External Accounts and sensitive PII
+
+Consent/attestation records for accessing third-party portals; do not store PECOS/NPPES credentials
+
+Full audit trail: who changed what/when (status, IDs, dates, uploads)
+
+Encrypted storage for sensitive fields; download watermarking; access logs
+
+Automations & integrations (now + future)
+
+Lookups
+
+NPI Registry + taxonomy auto-suggest
+
+USPS/Smarty for address + ZIP+4 + county
+
+Reminders
+
+License/DEA/CDS/privilege/liability renewals
+
+Re-credentialing/revalidation dates per payer
+
+Portal sync (where possible)
+
+Optional light ingestion/scraping/API for commercial payers (timestamp updates); exclude Medicare (as noted: highly protected)
+
+CAQH import assist
+
+Read-only pull or guided import (CSV/PDF capture) to prefill provider profile
+
+Form filler (commercial first)
+
+Map canonical fields → payer forms; evidence packet builder (W-9, license, CV, malpractice, etc.)
+
+Admin & configuration
+
+Enumerations: provider types, practice settings, lines of business, status reasons
+
+Payer directory (names, lines of business, required fields, re-credentialing cadence)
+
+Location templates (per-state default fields)
+
+SLA targets per stage for cycle-time reporting

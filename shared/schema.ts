@@ -68,6 +68,16 @@ export const renewalStatusEnum = pgEnum('renewal_status', [
 ]);
 export const renewalEntityTypeEnum = pgEnum('renewal_entity_type', ['license', 'dea', 'csr']);
 
+// Payer Enrollment enums
+export const enrollmentStatusEnum = pgEnum('enrollment_status', [
+  'discovery', 'data_complete', 'submitted', 'payer_processing', 'approved', 'active', 'stopped', 'denied'
+]);
+export const lineOfBusinessEnum = pgEnum('line_of_business', [
+  'hmo', 'ppo', 'epo', 'pos', 'medicare_advantage', 'medicaid', 'commercial', 'workers_comp', 'tricare'
+]);
+export const parStatusEnum = pgEnum('par_status', ['participating', 'non_participating', 'pending', 'unknown']);
+export const placeTypeEnum = pgEnum('place_type', ['clinic', 'hospital', 'telemed_hub', 'urgent_care', 'specialty_center']);
+
 // Tables
 
 // Users table for authentication
@@ -410,6 +420,141 @@ export const notifications = pgTable('notifications', {
   licenseType: text('license_type').notNull(),
   state: text('state').notNull(),
   expirationDate: date('expiration_date').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Payers table for insurance companies
+export const payers = pgTable('payers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  linesOfBusiness: lineOfBusinessEnum('lines_of_business').array().notNull(),
+  reCredentialingCadence: integer('re_credentialing_cadence').default(36), // months
+  requiredFields: jsonb('required_fields'), // Specific fields required by this payer
+  contactInfo: jsonb('contact_info'), // Phone, email, website
+  notes: text('notes'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Practice Locations table for enrollment per location
+export const practiceLocations = pgTable('practice_locations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  practiceId: uuid('practice_id').notNull().references(() => practices.id, { onDelete: 'cascade' }),
+  locationName: text('location_name').notNull(),
+  
+  // Address fields with ZIP+4 and county
+  streetAddress1: text('street_address_1').notNull(),
+  streetAddress2: text('street_address_2'),
+  city: text('city').notNull(),
+  state: text('state').notNull(),
+  zipCode: text('zip_code').notNull(),
+  zip4: text('zip_4'), // ZIP+4 extension
+  county: text('county'),
+  
+  // Contact information
+  phone: text('phone'),
+  fax: text('fax'),
+  email: text('email'),
+  
+  // Operational details
+  hoursOfOperation: jsonb('hours_of_operation'), // {monday: "9-5", tuesday: "9-5", etc}
+  placeType: placeTypeEnum('place_type').notNull(),
+  notes: text('notes'),
+  
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Banking/EFT information for providers
+export const providerBanking = pgTable('provider_banking', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  
+  // Banking details (encrypted sensitive data)
+  bankName: text('bank_name').notNull(),
+  routingNumber: text('routing_number').notNull(), // encrypted
+  accountNumber: text('account_number').notNull(), // encrypted
+  accountType: text('account_type').default('checking'), // checking/savings
+  
+  // EFT/ERA preferences
+  eftEnabled: boolean('eft_enabled').notNull().default(false),
+  eraEnabled: boolean('era_enabled').notNull().default(false),
+  
+  // Supporting documents
+  voidCheckUrl: text('void_check_url'),
+  bankLetterUrl: text('bank_letter_url'),
+  
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Professional References table
+export const professionalReferences = pgTable('professional_references', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  
+  referenceName: text('reference_name').notNull(),
+  title: text('title'),
+  organization: text('organization'),
+  phone: text('phone').notNull(),
+  email: text('email').notNull(),
+  relationship: text('relationship'), // colleague, supervisor, etc.
+  yearsKnown: integer('years_known'),
+  
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Payer Enrollments table - core enrollment tracking
+export const payerEnrollments = pgTable('payer_enrollments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  payerId: uuid('payer_id').notNull().references(() => payers.id, { onDelete: 'cascade' }),
+  practiceLocationId: uuid('practice_location_id').notNull().references(() => practiceLocations.id, { onDelete: 'cascade' }),
+  
+  // Enrollment details
+  linesOfBusiness: lineOfBusinessEnum('lines_of_business').array().notNull(),
+  networkName: text('network_name'),
+  tinUsed: text('tin_used'), // Tax ID used for this enrollment
+  npiUsed: text('npi_used'), // NPI used for this enrollment
+  
+  // Status and identification
+  enrollmentStatus: enrollmentStatusEnum('enrollment_status').notNull().default('discovery'),
+  providerId: text('provider_id'), // Payer-assigned provider ID
+  parStatus: parStatusEnum('par_status').notNull().default('pending'),
+  
+  // Important dates
+  effectiveDate: date('effective_date'),
+  revalidationDate: date('revalidation_date'),
+  reCredentialingDate: date('re_credentialing_date'),
+  submittedDate: date('submitted_date'),
+  approvedDate: date('approved_date'),
+  stoppedDate: date('stopped_date'),
+  stoppedReason: text('stopped_reason'),
+  
+  // Workflow tracking
+  nextActionRequired: text('next_action_required'),
+  nextActionDueDate: date('next_action_due_date'),
+  progressPercentage: integer('progress_percentage').notNull().default(0),
+  
+  // Documents and evidence
+  approvalLetterUrl: text('approval_letter_url'),
+  welcomeLetterUrl: text('welcome_letter_url'),
+  screenshotUrls: text('screenshot_urls').array(),
+  confirmationNumbers: text('confirmation_numbers').array(),
+  
+  // Communication tracking
+  contacts: jsonb('contacts'), // Array of contact persons and info
+  notes: text('notes'),
+  timeline: jsonb('timeline'), // Status change history with timestamps
+  
+  // Audit fields
+  createdBy: uuid('created_by').references(() => users.id),
+  updatedBy: uuid('updated_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
