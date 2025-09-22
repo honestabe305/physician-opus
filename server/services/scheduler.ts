@@ -269,6 +269,25 @@ export class NotificationScheduler {
   }
 
   /**
+   * Run automatic renewal workflow creation immediately (for testing)
+   */
+  async runAutoCreateWorkflowsNow(): Promise<void> {
+    console.log('🔄 Running immediate automatic renewal workflow creation...');
+    try {
+      const { renewalService } = await import('./renewal-service');
+      const results = await renewalService.createAutomaticRenewalWorkflows(90);
+      console.log(`✅ Immediate auto-create workflows completed: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+      
+      if (results.errors.length > 0) {
+        console.warn('⚠️ Errors during workflow creation:', results.errors);
+      }
+    } catch (error) {
+      console.error('❌ Failed to run automatic renewal workflow creation:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Test notification for a specific physician
    */
   async testPhysicianNotification(physicianId: string): Promise<void> {

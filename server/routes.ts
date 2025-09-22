@@ -2320,4 +2320,34 @@ router.get('/system/info', asyncHandler(async (req: any, res: any) => {
   });
 }));
 
+// Test endpoint for automated workflow creation (development only)
+router.get('/test/auto-workflows', asyncHandler(async (req: any, res: any) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  
+  try {
+    console.log('🧪 Manual test of automated workflow creation triggered...');
+    const { renewalService } = await import('./services/renewal-service');
+    const results = await renewalService.createAutomaticRenewalWorkflows(90);
+    
+    console.log(`✅ Test completed: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+    
+    res.json({
+      message: 'Automated workflow creation test completed',
+      results: {
+        created: results.created,
+        skipped: results.skipped,
+        errors: results.errors
+      }
+    });
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+    res.status(500).json({ 
+      error: 'Test failed', 
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
 export { router };
