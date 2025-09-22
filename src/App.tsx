@@ -37,6 +37,14 @@ const AnalyticsDashboardPage = lazy(() => import("./pages/AnalyticsDashboardPage
 const DeaCsrDashboardPage = lazy(() => import("./pages/DeaCsrDashboardPage"));
 const HelpDocumentationPage = lazy(() => import("./pages/HelpDocumentationPage"));
 
+// Payer Enrollment Pages
+const PayerEnrollmentDashboard = lazy(() => import("./pages/PayerEnrollmentDashboard"));
+const PayersPage = lazy(() => import("./pages/PayersPage"));
+const PracticeLocationsPage = lazy(() => import("./pages/PracticeLocationsPage"));
+const ProviderBankingPage = lazy(() => import("./pages/ProviderBankingPage"));
+const ProfessionalReferencesPage = lazy(() => import("./pages/ProfessionalReferencesPage"));
+const PayerEnrollmentsPage = lazy(() => import("./pages/PayerEnrollmentsPage"));
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -81,6 +89,14 @@ const App = () => (
                               <Route path="/analytics" component={AnalyticsDashboardPage} />
                               <Route path="/help" component={HelpDocumentationPage} />
                               <Route path="/settings" component={SettingsPage} />
+                              
+                              {/* Payer Enrollment Routes */}
+                              <Route path="/payer-enrollment" component={PayerEnrollmentDashboard} />
+                              <Route path="/payer-enrollment/payers" component={PayersPage} />
+                              <Route path="/payer-enrollment/practice-locations" component={PracticeLocationsPage} />
+                              <Route path="/payer-enrollment/banking" component={ProviderBankingPage} />
+                              <Route path="/payer-enrollment/references" component={ProfessionalReferencesPage} />
+                              <Route path="/payer-enrollment/enrollments" component={PayerEnrollmentsPage} />
                               <Route component={NotFound} />
                             </Switch>
                           </Suspense>

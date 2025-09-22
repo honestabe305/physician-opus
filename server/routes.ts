@@ -16,6 +16,11 @@ import {
   insertDeaRegistrationSchema,
   insertCsrLicenseSchema,
   insertNotificationSchema,
+  insertPayerSchema,
+  insertPracticeLocationSchema,
+  insertProviderBankingSchema,
+  insertProfessionalReferenceSchema,
+  insertPayerEnrollmentSchema,
   type SelectPractice,
   type SelectPhysician,
   type SelectPhysicianLicense,
@@ -29,7 +34,12 @@ import {
   type SelectUser,
   type SelectDeaRegistration,
   type SelectCsrLicense,
-  type SelectNotification
+  type SelectNotification,
+  type SelectPayer,
+  type SelectPracticeLocation,
+  type SelectProviderBanking,
+  type SelectProfessionalReference,
+  type SelectPayerEnrollment
 } from '../shared/schema';
 import { z } from 'zod';
 import {
@@ -39,12 +49,18 @@ import {
   providerRoleSchema,
   genericStatusSchema,
   documentTypeSchema,
+  lineOfBusinessSchema,
+  parStatusSchema,
+  placeTypeSchema,
   validateRenewalStatus,
   validateEnrollmentStatus,
   validateNotificationType,
   validateProviderRole,
   validateGenericStatus,
   validateDocumentType,
+  validateLineOfBusiness,
+  validateParStatus,
+  validatePlaceType,
 } from '../shared/enum-validation';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
 import {
@@ -86,6 +102,19 @@ import { NotificationService } from './services/notification-service';
 import { getScheduler } from './services/scheduler';
 import { documentService, type DocumentAuditEntry } from './services/document-service';
 import { analyticsService } from './services/analytics-service';
+import { 
+  logSecurityAudit, 
+  bankingAuditMiddleware, 
+  createBankingLimiterMiddleware,
+  auditMiddleware 
+} from './middleware/audit-logging';
+import {
+  enrollmentTransitionValidationMiddleware,
+  enrollmentProgressValidationMiddleware,
+  validateEnrollmentStatusTransition,
+  validateEnrollmentProgress,
+  validateEnrollmentBusinessRules
+} from './middleware/enrollment-validation';
 import multer from 'multer';
 import { type SelectLicenseDocument, insertLicenseDocumentSchema } from '../shared/schema';
 
@@ -118,9 +147,37 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter for sensitive banking operations
+const bankingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 requests per 15 minutes for sensitive banking operations
+  message: 'Too many banking data requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Enhanced banking rate limiter with proper middleware
+const bankingLimiterMiddleware = createBankingLimiterMiddleware(bankingLimiter);
+
 // Helper function for error handling
 const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {
   Promise.resolve(fn(req, res, next)).catch(next);
+};
+
+// Helper function to sanitize sensitive error responses
+const sanitizeError = (error: any, isSensitive: boolean = false) => {
+  if (isSensitive) {
+    // For sensitive resources, return generic error message
+    return {
+      error: 'Operation failed. Please contact system administrator if this persists.',
+      timestamp: new Date().toISOString()
+    };
+  }
+  // For non-sensitive resources, can include more details
+  return {
+    error: error instanceof Error ? error.message : 'Unknown error',
+    timestamp: new Date().toISOString()
+  };
 };
 
 // ============================
@@ -2377,6 +2434,1066 @@ router.get('/test/auto-workflows', asyncHandler(async (req: any, res: any) => {
     res.status(500).json({ 
       error: 'Test failed', 
       message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
+// ============================
+// PAYER ENROLLMENT MANAGEMENT ROUTES (CAQH-ALIGNED)
+// ============================
+
+// ============================
+// PAYERS MANAGEMENT ROUTES
+// ============================
+
+// GET /api/payers - Get all payers with optional filtering
+router.get('/api/payers', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { search, lineOfBusiness, isActive } = req.query;
+    
+    if (search) {
+      const payers = await storage.searchPayers(search);
+      res.json(payers);
+    } else if (lineOfBusiness) {
+      // Validate line of business enum
+      const validatedLineOfBusiness = validateLineOfBusiness(lineOfBusiness);
+      if (!validatedLineOfBusiness.success) {
+        return res.status(400).json({ 
+          error: 'Invalid line of business', 
+          details: validatedLineOfBusiness.error.errors 
+        });
+      }
+      const payers = await storage.getPayersByLineOfBusiness(validatedLineOfBusiness.data);
+      res.json(payers);
+    } else if (isActive !== undefined) {
+      const activeStatus = isActive === 'true';
+      const payers = await storage.getPayersByStatus(activeStatus);
+      res.json(payers);
+    } else {
+      const payers = await storage.getAllPayers();
+      res.json(payers);
+    }
+  } catch (error) {
+    console.error('Error fetching payers:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch payers', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// GET /api/payers/:id - Get specific payer
+router.get('/api/payers/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const payer = await storage.getPayer(req.params.id);
+    if (!payer) {
+      return res.status(404).json({ error: 'Payer not found' });
+    }
+    res.json(payer);
+  } catch (error) {
+    console.error('Error fetching payer:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch payer', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// POST /api/payers - Create new payer
+router.post('/api/payers', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body with strict parsing
+    const validatedData = insertPayerSchema.parse(req.body);
+
+    // Additional validation for enums
+    if (req.body.linesOfBusiness) {
+      for (const lob of req.body.linesOfBusiness) {
+        const lobValidation = validateLineOfBusiness(lob);
+        if (!lobValidation.success) {
+          return res.status(400).json({ 
+            error: `Invalid line of business: ${lob}`, 
+            details: lobValidation.error.errors 
+          });
+        }
+      }
+    }
+
+    // Check for duplicate payer name
+    const existingPayer = await storage.getPayerByName(req.body.name);
+    if (existingPayer) {
+      return res.status(409).json({ error: 'Payer with this name already exists' });
+    }
+
+    const payer = await storage.createPayer(validatedData);
+    res.status(201).json(payer);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Invalid payer data', 
+        details: (error as any).errors 
+      });
+    }
+    console.error('Error creating payer:', error);
+    res.status(500).json(sanitizeError(error, false));
+  }
+}));
+
+// PUT /api/payers/:id - Update payer
+router.put('/api/payers/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Check if payer exists
+    const existingPayer = await storage.getPayer(req.params.id);
+    if (!existingPayer) {
+      return res.status(404).json({ error: 'Payer not found' });
+    }
+
+    // Validate request body with strict parsing
+    const validatedData = insertPayerSchema.partial().parse(req.body);
+
+    // Additional validation for enums
+    if (req.body.linesOfBusiness) {
+      for (const lob of req.body.linesOfBusiness) {
+        const lobValidation = validateLineOfBusiness(lob);
+        if (!lobValidation.success) {
+          return res.status(400).json({ 
+            error: `Invalid line of business: ${lob}`, 
+            details: lobValidation.error.errors 
+          });
+        }
+      }
+    }
+
+    // Check for duplicate name if name is being updated
+    if (req.body.name && req.body.name !== existingPayer.name) {
+      const duplicatePayer = await storage.getPayerByName(req.body.name);
+      if (duplicatePayer) {
+        return res.status(409).json({ error: 'Payer with this name already exists' });
+      }
+    }
+
+    const payer = await storage.updatePayer(req.params.id, validatedData);
+    res.json(payer);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Invalid payer data', 
+        details: (error as any).errors 
+      });
+    }
+    console.error('Error updating payer:', error);
+    res.status(500).json(sanitizeError(error, false));
+  }
+}));
+
+// DELETE /api/payers/:id - Delete payer
+router.delete('/api/payers/:id', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const payer = await storage.getPayer(req.params.id);
+    if (!payer) {
+      return res.status(404).json({ error: 'Payer not found' });
+    }
+
+    // Check for existing enrollments
+    const enrollments = await storage.getPayerEnrollmentsByPayer(req.params.id);
+    if (enrollments.length > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot delete payer with existing enrollments', 
+        enrollmentCount: enrollments.length 
+      });
+    }
+
+    await storage.deletePayer(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting payer:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete payer', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// GET /api/payers/:id/enrollments - Get enrollments for a specific payer
+router.get('/api/payers/:id/enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const payer = await storage.getPayer(req.params.id);
+    if (!payer) {
+      return res.status(404).json({ error: 'Payer not found' });
+    }
+
+    const enrollments = await storage.getPayerEnrollmentsByPayer(req.params.id);
+    res.json(enrollments);
+  } catch (error) {
+    console.error('Error fetching payer enrollments:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch payer enrollments', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// ============================
+// PRACTICE LOCATIONS ROUTES
+// ============================
+
+// GET /api/practice-locations - Get all practice locations
+router.get('/api/practice-locations', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { practiceId, placeType, isActive } = req.query;
+    
+    if (practiceId) {
+      const locations = await storage.getPracticeLocationsByPractice(practiceId);
+      res.json(locations);
+    } else if (placeType) {
+      const validatedPlaceType = validatePlaceType(placeType);
+      if (!validatedPlaceType.success) {
+        return res.status(400).json({ 
+          error: 'Invalid place type', 
+          details: validatedPlaceType.error.errors 
+        });
+      }
+      const locations = await storage.getPracticeLocationsByType(validatedPlaceType.data);
+      res.json(locations);
+    } else if (isActive !== undefined) {
+      const activeStatus = isActive === 'true';
+      const locations = await storage.getPracticeLocationsByStatus(activeStatus);
+      res.json(locations);
+    } else {
+      const locations = await storage.getAllPracticeLocations();
+      res.json(locations);
+    }
+  } catch (error) {
+    console.error('Error fetching practice locations:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch practice locations', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// GET /api/practice-locations/:id - Get specific practice location
+router.get('/api/practice-locations/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const location = await storage.getPracticeLocation(req.params.id);
+    if (!location) {
+      return res.status(404).json({ error: 'Practice location not found' });
+    }
+    res.json(location);
+  } catch (error) {
+    console.error('Error fetching practice location:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch practice location', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// POST /api/practice-locations - Create new practice location
+router.post('/api/practice-locations', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body
+    const validationResult = insertPracticeLocationSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        error: 'Invalid practice location data', 
+        details: validationResult.error.errors 
+      });
+    }
+
+    // Validate place type enum
+    if (req.body.placeType) {
+      const placeTypeValidation = validatePlaceType(req.body.placeType);
+      if (!placeTypeValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid place type', 
+          details: placeTypeValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate that practice exists
+    if (req.body.practiceId) {
+      const practice = await storage.getPractice(req.body.practiceId);
+      if (!practice) {
+        return res.status(400).json({ error: 'Practice not found' });
+      }
+    }
+
+    const location = await storage.createPracticeLocation(validationResult.data);
+    res.status(201).json(location);
+  } catch (error) {
+    console.error('Error creating practice location:', error);
+    res.status(500).json({ 
+      error: 'Failed to create practice location', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// PUT /api/practice-locations/:id - Update practice location
+router.put('/api/practice-locations/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Check if location exists
+    const existingLocation = await storage.getPracticeLocation(req.params.id);
+    if (!existingLocation) {
+      return res.status(404).json({ error: 'Practice location not found' });
+    }
+
+    // Validate request body
+    const validationResult = insertPracticeLocationSchema.partial().safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        error: 'Invalid practice location data', 
+        details: validationResult.error.errors 
+      });
+    }
+
+    // Validate place type enum
+    if (req.body.placeType) {
+      const placeTypeValidation = validatePlaceType(req.body.placeType);
+      if (!placeTypeValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid place type', 
+          details: placeTypeValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate that practice exists if being updated
+    if (req.body.practiceId) {
+      const practice = await storage.getPractice(req.body.practiceId);
+      if (!practice) {
+        return res.status(400).json({ error: 'Practice not found' });
+      }
+    }
+
+    const location = await storage.updatePracticeLocation(req.params.id, validationResult.data);
+    res.json(location);
+  } catch (error) {
+    console.error('Error updating practice location:', error);
+    res.status(500).json({ 
+      error: 'Failed to update practice location', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// DELETE /api/practice-locations/:id - Delete practice location
+router.delete('/api/practice-locations/:id', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const location = await storage.getPracticeLocation(req.params.id);
+    if (!location) {
+      return res.status(404).json({ error: 'Practice location not found' });
+    }
+
+    // Check for existing enrollments
+    const enrollments = await storage.getPayerEnrollmentsByLocation(req.params.id);
+    if (enrollments.length > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot delete practice location with existing enrollments', 
+        enrollmentCount: enrollments.length 
+      });
+    }
+
+    await storage.deletePracticeLocation(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting practice location:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete practice location', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// ============================
+// PROVIDER BANKING ROUTES (WITH ENCRYPTION)
+// ============================
+
+// GET /api/provider-banking - Get all provider banking (redacted by default)
+router.get('/api/provider-banking', authMiddleware, bankingAuditMiddleware('view_banking_list'), asyncHandler(async (req: any, res: any) => {
+  try {
+    const { physicianId, includeDecrypted, page = '1', limit = '25' } = req.query;
+    
+    // Parse pagination parameters
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 25));
+    const offset = (pageNum - 1) * limitNum;
+    
+    if (physicianId) {
+      if (includeDecrypted === 'true') {
+        // This is a critical path - redirect to dedicated decrypted endpoint
+        return res.status(400).json({ 
+          error: 'Use /api/provider-banking/decrypted endpoint for decrypted access' 
+        });
+      }
+      
+      const bankingData = await storage.getProviderBankingByPhysician(physicianId);
+      res.json({
+        data: bankingData,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: bankingData.length
+        }
+      });
+    } else {
+      const bankingData = await storage.getAllProviderBanking();
+      const paginatedData = bankingData.slice(offset, offset + limitNum);
+      
+      res.json({
+        data: paginatedData,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: bankingData.length,
+          totalPages: Math.ceil(bankingData.length / limitNum)
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching provider banking:', error);
+    res.status(500).json(sanitizeError(error, true));
+  }
+}));
+
+// GET /api/provider-banking/:id - Get specific provider banking record (redacted)
+router.get('/api/provider-banking/:id', authMiddleware, bankingAuditMiddleware('view_banking_record'), asyncHandler(async (req: any, res: any) => {
+  try {
+    const { includeDecrypted } = req.query;
+    
+    if (includeDecrypted === 'true') {
+      // Redirect to dedicated decrypted endpoint
+      return res.status(400).json({ 
+        error: 'Use /api/provider-banking/:id/decrypted endpoint for decrypted access' 
+      });
+    }
+    
+    const bankingData = await storage.getProviderBanking(req.params.id);
+    if (!bankingData) {
+      return res.status(404).json({ error: 'Provider banking record not found' });
+    }
+    res.json(bankingData);
+  } catch (error) {
+    console.error('Error fetching provider banking:', error);
+    res.status(500).json(sanitizeError(error, true));
+  }
+}));
+
+// GET /api/provider-banking/:id/decrypted - Get decrypted banking record (admin only)
+router.get('/api/provider-banking/:id/decrypted', 
+  authMiddleware, 
+  adminMiddleware, 
+  bankingLimiterMiddleware,
+  bankingAuditMiddleware('view_banking_decrypted'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      const bankingData = await storage.getProviderBankingDecryptedById(req.params.id);
+      if (!bankingData) {
+        return res.status(404).json({ error: 'Provider banking record not found' });
+      }
+      
+      res.json(bankingData);
+    } catch (error) {
+      console.error('Error fetching decrypted provider banking:', error);
+      res.status(500).json(sanitizeError(error, true));
+    }
+  })
+);
+
+// GET /api/provider-banking/physician/:physicianId/decrypted - Get decrypted banking by physician (admin only)
+router.get('/api/provider-banking/physician/:physicianId/decrypted',
+  authMiddleware,
+  adminMiddleware,
+  bankingLimiterMiddleware,
+  bankingAuditMiddleware('view_banking_decrypted_by_physician'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      const bankingData = await storage.getProviderBankingDecrypted(req.params.physicianId);
+      res.json(bankingData);
+    } catch (error) {
+      console.error('Error fetching decrypted provider banking by physician:', error);
+      res.status(500).json(sanitizeError(error, true));
+    }
+  })
+);
+
+// POST /api/provider-banking - Create new provider banking record
+router.post('/api/provider-banking', 
+  authMiddleware, 
+  bankingAuditMiddleware('create_banking'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      // Validate request body with strict parsing
+      const validatedData = insertProviderBankingSchema.parse(req.body);
+
+      // Validate that physician exists
+      if (validatedData.physicianId) {
+        const physician = await storage.getPhysician(validatedData.physicianId);
+        if (!physician) {
+          return res.status(400).json({ error: 'Physician not found' });
+        }
+      }
+
+      // Check for existing banking record for this physician (409 conflict)
+      const existingBanking = await storage.getProviderBankingByPhysician(validatedData.physicianId);
+      if (existingBanking.length > 0) {
+        return res.status(409).json({ 
+          error: 'Banking record already exists for this physician',
+          conflictType: 'duplicate_physician_banking'
+        });
+      }
+
+      const bankingData = await storage.createProviderBanking(validatedData);
+      res.status(201).json(bankingData);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: 'Invalid provider banking data', 
+          details: (error as any).errors 
+        });
+      }
+      console.error('Error creating provider banking:', error);
+      res.status(500).json(sanitizeError(error, true));
+    }
+  })
+);
+
+// PUT /api/provider-banking/:id - Update provider banking record
+router.put('/api/provider-banking/:id', 
+  authMiddleware, 
+  bankingAuditMiddleware('update_banking'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      // Check if banking record exists
+      const existingBanking = await storage.getProviderBanking(req.params.id);
+      if (!existingBanking) {
+        return res.status(404).json({ error: 'Provider banking record not found' });
+      }
+
+      // Validate request body with strict parsing
+      const validatedData = insertProviderBankingSchema.partial().parse(req.body);
+
+      // Validate that physician exists if being updated
+      if (validatedData.physicianId) {
+        const physician = await storage.getPhysician(validatedData.physicianId);
+        if (!physician) {
+          return res.status(400).json({ error: 'Physician not found' });
+        }
+        
+        // Check for conflicts if changing physician
+        if (validatedData.physicianId !== existingBanking.physicianId) {
+          const existingForNewPhysician = await storage.getProviderBankingByPhysician(validatedData.physicianId);
+          if (existingForNewPhysician.length > 0) {
+            return res.status(409).json({ 
+              error: 'Banking record already exists for the target physician',
+              conflictType: 'duplicate_physician_banking'
+            });
+          }
+        }
+      }
+
+      const bankingData = await storage.updateProviderBanking(req.params.id, validatedData);
+      res.json(bankingData);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: 'Invalid provider banking data', 
+          details: (error as any).errors 
+        });
+      }
+      console.error('Error updating provider banking:', error);
+      res.status(500).json(sanitizeError(error, true));
+    }
+  })
+);
+
+// DELETE /api/provider-banking/:id - Delete provider banking record (admin only)
+router.delete('/api/provider-banking/:id', 
+  authMiddleware, 
+  adminMiddleware,
+  bankingAuditMiddleware('delete_banking'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      const bankingData = await storage.getProviderBanking(req.params.id);
+      if (!bankingData) {
+        return res.status(404).json({ error: 'Provider banking record not found' });
+      }
+
+      await storage.deleteProviderBanking(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting provider banking:', error);
+      res.status(500).json(sanitizeError(error, true));
+    }
+  })
+);
+
+// ============================
+// PROFESSIONAL REFERENCES ROUTES
+// ============================
+
+// GET /api/professional-references - Get all professional references
+router.get('/api/professional-references', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { physicianId } = req.query;
+    
+    if (physicianId) {
+      const references = await storage.getProfessionalReferencesByPhysician(physicianId);
+      res.json(references);
+    } else {
+      const references = await storage.getAllProfessionalReferences();
+      res.json(references);
+    }
+  } catch (error) {
+    console.error('Error fetching professional references:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch professional references', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// GET /api/professional-references/:id - Get specific professional reference
+router.get('/api/professional-references/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const reference = await storage.getProfessionalReference(req.params.id);
+    if (!reference) {
+      return res.status(404).json({ error: 'Professional reference not found' });
+    }
+    res.json(reference);
+  } catch (error) {
+    console.error('Error fetching professional reference:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch professional reference', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// POST /api/professional-references - Create new professional reference
+router.post('/api/professional-references', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body with strict parsing
+    const validatedData = insertProfessionalReferenceSchema.parse(req.body);
+
+    // Validate that physician exists
+    if (req.body.physicianId) {
+      const physician = await storage.getPhysician(req.body.physicianId);
+      if (!physician) {
+        return res.status(400).json({ error: 'Physician not found' });
+      }
+    }
+
+    const reference = await storage.createProfessionalReference(validatedData);
+    res.status(201).json(reference);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Invalid professional reference data', 
+        details: (error as any).errors 
+      });
+    }
+    console.error('Error creating professional reference:', error);
+    res.status(500).json(sanitizeError(error, false));
+  }
+}));
+
+// PUT /api/professional-references/:id - Update professional reference
+router.put('/api/professional-references/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Check if reference exists
+    const existingReference = await storage.getProfessionalReference(req.params.id);
+    if (!existingReference) {
+      return res.status(404).json({ error: 'Professional reference not found' });
+    }
+
+    // Validate request body with strict parsing
+    const validatedData = insertProfessionalReferenceSchema.partial().parse(req.body);
+
+    // Validate that physician exists if being updated
+    if (req.body.physicianId) {
+      const physician = await storage.getPhysician(req.body.physicianId);
+      if (!physician) {
+        return res.status(400).json({ error: 'Physician not found' });
+      }
+    }
+
+    const reference = await storage.updateProfessionalReference(req.params.id, validatedData);
+    res.json(reference);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ 
+        error: 'Invalid professional reference data', 
+        details: (error as any).errors 
+      });
+    }
+    console.error('Error updating professional reference:', error);
+    res.status(500).json(sanitizeError(error, false));
+  }
+}));
+
+// DELETE /api/professional-references/:id - Delete professional reference
+router.delete('/api/professional-references/:id', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const reference = await storage.getProfessionalReference(req.params.id);
+    if (!reference) {
+      return res.status(404).json({ error: 'Professional reference not found' });
+    }
+
+    await storage.deleteProfessionalReference(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting professional reference:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete professional reference', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// ============================
+// PAYER ENROLLMENTS ROUTES
+// ============================
+
+// GET /api/payer-enrollments - Get all payer enrollments with filtering
+router.get('/api/payer-enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { physicianId, payerId, locationId, status, expiringDays } = req.query;
+    
+    if (physicianId) {
+      const enrollments = await storage.getPayerEnrollmentsByPhysician(physicianId);
+      res.json(enrollments);
+    } else if (payerId) {
+      const enrollments = await storage.getPayerEnrollmentsByPayer(payerId);
+      res.json(enrollments);
+    } else if (locationId) {
+      const enrollments = await storage.getPayerEnrollmentsByLocation(locationId);
+      res.json(enrollments);
+    } else if (status) {
+      const validatedStatus = validateEnrollmentStatus(status);
+      if (!validatedStatus.success) {
+        return res.status(400).json({ 
+          error: 'Invalid enrollment status', 
+          details: validatedStatus.error.errors 
+        });
+      }
+      const enrollments = await storage.getPayerEnrollmentsByStatus(validatedStatus.data);
+      res.json(enrollments);
+    } else if (expiringDays) {
+      const days = parseInt(expiringDays);
+      if (isNaN(days) || days < 0) {
+        return res.status(400).json({ error: 'Invalid expiring days parameter' });
+      }
+      const enrollments = await storage.getExpiringEnrollments(days);
+      res.json(enrollments);
+    } else {
+      const enrollments = await storage.getAllPayerEnrollments();
+      res.json(enrollments);
+    }
+  } catch (error) {
+    console.error('Error fetching payer enrollments:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch payer enrollments', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// GET /api/payer-enrollments/:id - Get specific payer enrollment
+router.get('/api/payer-enrollments/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const enrollment = await storage.getPayerEnrollment(req.params.id);
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Payer enrollment not found' });
+    }
+    res.json(enrollment);
+  } catch (error) {
+    console.error('Error fetching payer enrollment:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch payer enrollment', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// POST /api/payer-enrollments - Create new payer enrollment
+router.post('/api/payer-enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Validate request body
+    const validationResult = insertPayerEnrollmentSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        error: 'Invalid payer enrollment data', 
+        details: validationResult.error.errors 
+      });
+    }
+
+    // Validate enrollment status enum
+    if (req.body.status) {
+      const statusValidation = validateEnrollmentStatus(req.body.status);
+      if (!statusValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid enrollment status', 
+          details: statusValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate par status enum
+    if (req.body.parStatus) {
+      const parStatusValidation = validateParStatus(req.body.parStatus);
+      if (!parStatusValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid PAR status', 
+          details: parStatusValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate foreign key relationships
+    if (req.body.physicianId) {
+      const physician = await storage.getPhysician(req.body.physicianId);
+      if (!physician) {
+        return res.status(400).json({ error: 'Physician not found' });
+      }
+    }
+
+    if (req.body.payerId) {
+      const payer = await storage.getPayer(req.body.payerId);
+      if (!payer) {
+        return res.status(400).json({ error: 'Payer not found' });
+      }
+    }
+
+    if (req.body.locationId) {
+      const location = await storage.getPracticeLocation(req.body.locationId);
+      if (!location) {
+        return res.status(400).json({ error: 'Practice location not found' });
+      }
+    }
+
+    // Check for duplicate enrollment
+    const existingEnrollments = await storage.getPayerEnrollmentsByPhysician(req.body.physicianId);
+    const duplicateEnrollment = existingEnrollments.find(e => 
+      e.payerId === req.body.payerId && e.locationId === req.body.locationId
+    );
+    if (duplicateEnrollment) {
+      return res.status(409).json({ error: 'Enrollment already exists for this physician, payer, and location combination' });
+    }
+
+    const enrollment = await storage.createPayerEnrollment(validationResult.data);
+    res.status(201).json(enrollment);
+  } catch (error) {
+    console.error('Error creating payer enrollment:', error);
+    res.status(500).json({ 
+      error: 'Failed to create payer enrollment', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// PUT /api/payer-enrollments/:id - Update payer enrollment
+router.put('/api/payer-enrollments/:id', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    // Check if enrollment exists
+    const existingEnrollment = await storage.getPayerEnrollment(req.params.id);
+    if (!existingEnrollment) {
+      return res.status(404).json({ error: 'Payer enrollment not found' });
+    }
+
+    // Validate request body
+    const validationResult = insertPayerEnrollmentSchema.partial().safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        error: 'Invalid payer enrollment data', 
+        details: validationResult.error.errors 
+      });
+    }
+
+    // Validate enrollment status enum
+    if (req.body.status) {
+      const statusValidation = validateEnrollmentStatus(req.body.status);
+      if (!statusValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid enrollment status', 
+          details: statusValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate par status enum
+    if (req.body.parStatus) {
+      const parStatusValidation = validateParStatus(req.body.parStatus);
+      if (!parStatusValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid PAR status', 
+          details: parStatusValidation.error.errors 
+        });
+      }
+    }
+
+    // Validate foreign key relationships if being updated
+    if (req.body.physicianId) {
+      const physician = await storage.getPhysician(req.body.physicianId);
+      if (!physician) {
+        return res.status(400).json({ error: 'Physician not found' });
+      }
+    }
+
+    if (req.body.payerId) {
+      const payer = await storage.getPayer(req.body.payerId);
+      if (!payer) {
+        return res.status(400).json({ error: 'Payer not found' });
+      }
+    }
+
+    if (req.body.locationId) {
+      const location = await storage.getPracticeLocation(req.body.locationId);
+      if (!location) {
+        return res.status(400).json({ error: 'Practice location not found' });
+      }
+    }
+
+    const enrollment = await storage.updatePayerEnrollment(req.params.id, validationResult.data);
+    res.json(enrollment);
+  } catch (error) {
+    console.error('Error updating payer enrollment:', error);
+    res.status(500).json({ 
+      error: 'Failed to update payer enrollment', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// DELETE /api/payer-enrollments/:id - Delete payer enrollment
+router.delete('/api/payer-enrollments/:id', authMiddleware, adminMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const enrollment = await storage.getPayerEnrollment(req.params.id);
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Payer enrollment not found' });
+    }
+
+    await storage.deletePayerEnrollment(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting payer enrollment:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete payer enrollment', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}));
+
+// PATCH /api/payer-enrollments/:id/status - Update enrollment status (with transition validation)
+router.patch('/api/payer-enrollments/:id/status', 
+  authMiddleware,
+  enrollmentTransitionValidationMiddleware,
+  auditMiddleware('update_enrollment_status', 'payer_enrollment'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      const { status, ...statusData } = req.body;
+      
+      if (!status) {
+        return res.status(400).json({ error: 'Status is required' });
+      }
+
+      // Validate enrollment status enum
+      const statusValidation = validateEnrollmentStatus(status);
+      if (!statusValidation.success) {
+        return res.status(400).json({ 
+          error: 'Invalid enrollment status', 
+          details: statusValidation.error.errors 
+        });
+      }
+
+      // Check if enrollment exists
+      const existingEnrollment = await storage.getPayerEnrollment(req.params.id);
+      if (!existingEnrollment) {
+        return res.status(404).json({ error: 'Payer enrollment not found' });
+      }
+
+      // Validate status transition
+      const transitionValidation = validateEnrollmentStatusTransition(
+        existingEnrollment.enrollmentStatus as any,
+        status
+      );
+      if (!transitionValidation.valid) {
+        return res.status(400).json({ 
+          error: transitionValidation.error,
+          currentStatus: existingEnrollment.enrollmentStatus,
+          requestedStatus: status
+        });
+      }
+
+      // Validate business rules
+      const businessRuleValidation = validateEnrollmentBusinessRules(status, {
+        ...statusData,
+        stoppedReason: req.body.stoppedReason,
+        providerId: req.body.providerId
+      });
+      if (!businessRuleValidation.valid) {
+        return res.status(400).json({ error: businessRuleValidation.error });
+      }
+
+      const enrollment = await storage.updateEnrollmentStatus(req.params.id, status);
+      res.json(enrollment);
+    } catch (error) {
+      console.error('Error updating enrollment status:', error);
+      res.status(500).json(sanitizeError(error, false));
+    }
+  })
+);
+
+// PATCH /api/payer-enrollments/:id/progress - Update enrollment progress (with bounds validation)
+router.patch('/api/payer-enrollments/:id/progress', 
+  authMiddleware,
+  enrollmentProgressValidationMiddleware,
+  auditMiddleware('update_enrollment_progress', 'payer_enrollment'),
+  asyncHandler(async (req: any, res: any) => {
+    try {
+      const { progress } = req.body;
+      
+      if (progress === undefined || progress === null) {
+        return res.status(400).json({ error: 'Progress is required' });
+      }
+
+      // Enhanced progress validation
+      const progressValidation = validateEnrollmentProgress(progress);
+      if (!progressValidation.valid) {
+        return res.status(400).json({ error: progressValidation.error });
+      }
+
+      // Check if enrollment exists
+      const existingEnrollment = await storage.getPayerEnrollment(req.params.id);
+      if (!existingEnrollment) {
+        return res.status(404).json({ error: 'Payer enrollment not found' });
+      }
+
+      const enrollment = await storage.updateEnrollmentProgress(req.params.id, progress);
+      res.json(enrollment);
+    } catch (error) {
+      console.error('Error updating enrollment progress:', error);
+      res.status(500).json(sanitizeError(error, false));
+    }
+  })
+);
+
+// GET /api/physicians/:id/enrollments - Get enrollments for a specific physician
+router.get('/api/physicians/:id/enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const physician = await storage.getPhysician(req.params.id);
+    if (!physician) {
+      return res.status(404).json({ error: 'Physician not found' });
+    }
+
+    const enrollments = await storage.getPayerEnrollmentsByPhysician(req.params.id);
+    res.json(enrollments);
+  } catch (error) {
+    console.error('Error fetching physician enrollments:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch physician enrollments', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 }));

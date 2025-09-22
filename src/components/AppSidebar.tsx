@@ -12,7 +12,11 @@ import {
   GraduationCap,
   LogOut,
   RefreshCcw,
-  HelpCircle
+  HelpCircle,
+  CreditCard,
+  UserCheck,
+  MapPin,
+  Workflow
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDisplayName, getInitials, getUserRole, getUserEmail } from "@/lib/user-display-utils";
@@ -55,6 +59,17 @@ const navigation = [
       { title: "Education", url: "/education", icon: GraduationCap },
       { title: "Work History", url: "/work-history", icon: Clock },
       { title: "Renewal Workflows", url: "/renewal-workflows", icon: RefreshCcw },
+    ]
+  },
+  {
+    title: "Payer Enrollment",
+    items: [
+      { title: "Enrollment Dashboard", url: "/payer-enrollment", icon: BarChart3 },
+      { title: "Enrollments", url: "/payer-enrollment/enrollments", icon: Workflow },
+      { title: "Payers", url: "/payer-enrollment/payers", icon: Building2 },
+      { title: "Practice Locations", url: "/payer-enrollment/practice-locations", icon: MapPin },
+      { title: "Banking Information", url: "/payer-enrollment/banking", icon: CreditCard },
+      { title: "Professional References", url: "/payer-enrollment/references", icon: UserCheck },
     ]
   },
   {
