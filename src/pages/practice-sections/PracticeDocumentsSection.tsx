@@ -53,7 +53,7 @@ const practiceDocumentSchema = z.object({
   documentName: z.string().min(1, "Document name is required"),
   expirationDate: z.string().optional(),
   notes: z.string().optional(),
-  file: z.any().optional(),
+  file: z.instanceof(File).optional().or(z.literal(undefined)),
 });
 
 type PracticeDocumentData = z.infer<typeof practiceDocumentSchema>;
@@ -89,6 +89,7 @@ export function PracticeDocumentsSection({ practices, searchTerm, onRefresh }: P
       documentName: "",
       expirationDate: "",
       notes: "",
+      file: undefined,
     },
   });
 
@@ -164,10 +165,7 @@ export function PracticeDocumentsSection({ practices, searchTerm, onRefresh }: P
   }, [documents, documentSearchTerm, selectedPracticeFilter, documentTypeFilter]);
 
   const onUploadSubmit = (data: PracticeDocumentData) => {
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = fileInput?.files?.[0];
-    
-    if (!file) {
+    if (!data.file) {
       toast({
         title: "Error",
         description: "Please select a file to upload",
@@ -177,7 +175,7 @@ export function PracticeDocumentsSection({ practices, searchTerm, onRefresh }: P
     }
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', data.file);
     formData.append('practiceId', data.practiceId);
     formData.append('documentType', data.documentType);
     formData.append('documentName', data.documentName);
@@ -384,18 +382,28 @@ export function PracticeDocumentsSection({ practices, searchTerm, onRefresh }: P
                   )}
                 />
                 
-                <div>
-                  <label className="text-sm font-medium">File</label>
-                  <Input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    data-testid="input-document-file"
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
-                  </p>
-                </div>
+                <FormField
+                  control={uploadForm.control}
+                  name="file"
+                  render={({ field: { value, onChange, ...fieldProps } }) => (
+                    <FormItem>
+                      <FormLabel>File</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="file"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          data-testid="input-document-file"
+                          onChange={(e) => onChange(e.target.files?.[0])}
+                          {...fieldProps}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Supported formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 
                 <FormField
                   control={uploadForm.control}

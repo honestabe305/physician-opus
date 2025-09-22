@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,33 +32,28 @@ interface ConsolidatedPracticePageProps {
 }
 
 export default function ConsolidatedPracticePage({ defaultTab = "info" }: ConsolidatedPracticePageProps) {
-  const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [location, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const { toast } = useToast();
 
-  // Parse URL for tab selection
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+  // Parse current URL for active tab
+  const activeTab = useMemo(() => {
+    const params = new URLSearchParams(location.includes('?') ? location.split('?')[1] : '');
     const section = params.get('section');
     if (section && ['info', 'locations', 'documents'].includes(section)) {
-      setActiveTab(section);
+      return section;
     }
-  }, []);
+    return 'info';
+  }, [location]);
 
-  // Update URL when tab changes
+  // Update URL when tab changes using wouter
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    const params = new URLSearchParams(window.location.search);
     if (tab === 'info') {
-      params.delete('section');
+      setLocation('/practices', { replace: true });
     } else {
-      params.set('section', tab);
+      setLocation(`/practices?section=${tab}`, { replace: true });
     }
-    const newSearch = params.toString();
-    const newPath = `/practice${newSearch ? `?${newSearch}` : ''}`;
-    window.history.replaceState({}, '', newPath);
   };
 
   // Debounce search term
@@ -76,12 +71,31 @@ export default function ConsolidatedPracticePage({ defaultTab = "info" }: Consol
 
   const practices = practicesResponse?.data || [];
 
-  // Overview stats
-  const practiceStats = {
+  // Fetch locations and documents for overview stats
+  const { data: locationsResponse } = useQuery({
+    queryKey: ['/practice-locations'],
+  });
+
+  const { data: documentsResponse } = useQuery({
+    queryKey: ['/practice-documents'],
+  });
+
+  const locations = locationsResponse?.data || [];
+  const documents = documentsResponse?.data || [];
+
+  // Overview stats with actual data
+  const practiceStats = useMemo(() => ({
     totalPractices: practices.length,
     activePractices: practices.filter((p: any) => p.isActive).length,
-    totalLocations: 0, // Will be calculated from locations data
-    totalDocuments: 0, // Will be calculated from documents data
+    totalLocations: locations.length,
+    totalDocuments: documents.length,
+  }), [practices, locations, documents]);
+
+  // Handle refresh for all child components
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['/practices'] });
+    queryClient.invalidateQueries({ queryKey: ['/practice-locations'] });
+    queryClient.invalidateQueries({ queryKey: ['/practice-documents'] });
   };
 
   if (practicesError) {
@@ -193,7 +207,7 @@ export default function ConsolidatedPracticePage({ defaultTab = "info" }: Consol
             <PracticeInfoSection 
               practices={practices} 
               searchTerm={debouncedSearch}
-              onRefresh={() => queryClient.invalidateQueries({ queryKey: ['/practices'] })}
+              onRefresh={handleRefresh}
             />
           )}
         </TabsContent>
@@ -202,7 +216,7 @@ export default function ConsolidatedPracticePage({ defaultTab = "info" }: Consol
           <PracticeLocationsSection 
             practices={practices}
             searchTerm={debouncedSearch}
-            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['/practices'] })}
+            onRefresh={handleRefresh}
           />
         </TabsContent>
 
@@ -210,7 +224,7 @@ export default function ConsolidatedPracticePage({ defaultTab = "info" }: Consol
           <PracticeDocumentsSection 
             practices={practices}
             searchTerm={debouncedSearch}
-            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['/practices'] })}
+            onRefresh={handleRefresh}
           />
         </TabsContent>
       </Tabs>
