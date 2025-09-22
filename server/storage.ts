@@ -22,7 +22,7 @@ import {
   renewalWorkflows,
   payers,
   practiceLocations,
-  providerBanking,
+  practiceDocuments,
   professionalReferences,
   payerEnrollments,
   type SelectUser,
@@ -67,8 +67,8 @@ import {
   type InsertPayer,
   type SelectPracticeLocation,
   type InsertPracticeLocation,
-  type SelectProviderBanking,
-  type InsertProviderBanking,
+  type SelectPracticeDocument,
+  type InsertPracticeDocument,
   type SelectProfessionalReference,
   type InsertProfessionalReference,
   type SelectPayerEnrollment,
@@ -334,16 +334,16 @@ export interface IStorage {
   deletePracticeLocation(id: string): Promise<void>;
   getAllPracticeLocations(): Promise<SelectPracticeLocation[]>;
 
-  // Provider Banking operations
-  createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking>;
-  // SECURE DEFAULT: These methods return redacted data by default
-  getProviderBanking(id: string): Promise<SelectProviderBanking | null>;
-  getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null>;
-  // PRIVILEGED ACCESS: These methods require role validation and return decrypted data
-  getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null>;
-  getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null>;
-  updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking>;
-  deleteProviderBanking(id: string): Promise<void>;
+  // Practice Documents operations (for group-level banking documents)
+  createPracticeDocument(document: InsertPracticeDocument): Promise<SelectPracticeDocument>;
+  getPracticeDocument(id: string): Promise<SelectPracticeDocument | null>;
+  getPracticeDocumentsByPractice(practiceId: string): Promise<SelectPracticeDocument[]>;
+  getPracticeDocumentsByType(practiceId: string, documentType: string): Promise<SelectPracticeDocument[]>;
+  getAllPracticeDocuments(): Promise<SelectPracticeDocument[]>;
+  getAllPracticeDocumentsPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPracticeDocument[]>;
+  getAllPracticeDocumentsCount(filters?: SearchFilter[]): Promise<number>;
+  updatePracticeDocument(id: string, updates: Partial<InsertPracticeDocument>): Promise<SelectPracticeDocument>;
+  deletePracticeDocument(id: string): Promise<void>;
 
   // Professional Reference operations
   createProfessionalReference(reference: InsertProfessionalReference): Promise<SelectProfessionalReference>;
@@ -406,7 +406,6 @@ export interface IStorage {
     deaRegistrations: SelectDeaRegistration[];
     csrLicenses: SelectCsrLicense[];
     licenseDocuments: SelectLicenseDocument[];
-    providerBanking: SelectProviderBanking | null;
     professionalReferences: SelectProfessionalReference[];
     payerEnrollments: SelectPayerEnrollment[];
   }>;
@@ -3316,169 +3315,175 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  // Provider Banking operations
-  async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
+  // Practice Documents operations (for group-level banking documents)
+  async createPracticeDocument(document: InsertPracticeDocument): Promise<SelectPracticeDocument> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(practiceDocuments).values(document).returning();
+      if (!result) {
+        throw new Error('Failed to create practice document');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating practice document:', error);
+      throw new Error(`Failed to create practice document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeDocument(id: string): Promise<SelectPracticeDocument | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(practiceDocuments).where(eq(practiceDocuments.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting practice document:', error);
+      throw new Error(`Failed to get practice document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeDocumentsByPractice(practiceId: string): Promise<SelectPracticeDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practiceDocuments).where(
+        and(
+          eq(practiceDocuments.practiceId, practiceId),
+          eq(practiceDocuments.isActive, true)
+        )
+      );
+    } catch (error) {
+      console.error('Error getting practice documents by practice:', error);
+      throw new Error(`Failed to get practice documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeDocumentsByType(practiceId: string, documentType: string): Promise<SelectPracticeDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practiceDocuments).where(
+        and(
+          eq(practiceDocuments.practiceId, practiceId),
+          eq(practiceDocuments.documentType, documentType),
+          eq(practiceDocuments.isActive, true)
+        )
+      );
+    } catch (error) {
+      console.error('Error getting practice documents by type:', error);
+      throw new Error(`Failed to get practice documents by type: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPracticeDocuments(): Promise<SelectPracticeDocument[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practiceDocuments).where(eq(practiceDocuments.isActive, true));
+    } catch (error) {
+      console.error('Error getting all practice documents:', error);
+      throw new Error(`Failed to get practice documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPracticeDocumentsPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPracticeDocument[]> {
     try {
       const db = await this.getDb();
       
-      // Encrypt sensitive fields before storage using enhanced encryption
-      const encryptedBanking = {
-        ...banking,
-        routingNumber: banking.routingNumber ? encrypt(banking.routingNumber, { dataType: 'banking' }) : banking.routingNumber,
-        accountNumber: banking.accountNumber ? encrypt(banking.accountNumber, { dataType: 'banking' }) : banking.accountNumber
-      };
+      let query = db.select().from(practiceDocuments);
       
-      const [result] = await db.insert(providerBanking).values(encryptedBanking).returning();
-      if (!result) {
-        throw new Error('Failed to create provider banking');
+      // Apply filters
+      const conditions = [eq(practiceDocuments.isActive, true)];
+      
+      if (filters && filters.length > 0) {
+        for (const filter of filters) {
+          if (filter.field === 'documentName' && filter.value) {
+            conditions.push(ilike(practiceDocuments.documentName, `%${filter.value}%`));
+          } else if (filter.field === 'documentType' && filter.value) {
+            conditions.push(eq(practiceDocuments.documentType, filter.value));
+          } else if (filter.field === 'practiceId' && filter.value) {
+            conditions.push(eq(practiceDocuments.practiceId, filter.value));
+          }
+        }
       }
       
-      // Return redacted data by default for security
-      return redactBankingData(result);
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      // Apply pagination
+      return await query
+        .orderBy(desc(practiceDocuments.createdAt))
+        .limit(pagination.limit)
+        .offset(pagination.offset);
     } catch (error) {
-      console.error('Error creating provider banking:', error);
-      throw new Error(`Failed to create provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error getting paginated practice documents:', error);
+      throw new Error(`Failed to get practice documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  // SECURE DEFAULT: Returns redacted banking data
-  async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
+  async getAllPracticeDocumentsCount(filters?: SearchFilter[]): Promise<number> {
     try {
       const db = await this.getDb();
-      const [result] = await db.select().from(providerBanking).where(eq(providerBanking.id, id));
-      if (!result) return null;
       
-      // Return redacted version for secure display (default behavior)
-      return redactBankingData(result);
+      let query = db.select({ count: count(practiceDocuments.id) }).from(practiceDocuments);
+      
+      // Apply filters
+      const conditions = [eq(practiceDocuments.isActive, true)];
+      
+      if (filters && filters.length > 0) {
+        for (const filter of filters) {
+          if (filter.field === 'documentName' && filter.value) {
+            conditions.push(ilike(practiceDocuments.documentName, `%${filter.value}%`));
+          } else if (filter.field === 'documentType' && filter.value) {
+            conditions.push(eq(practiceDocuments.documentType, filter.value));
+          } else if (filter.field === 'practiceId' && filter.value) {
+            conditions.push(eq(practiceDocuments.practiceId, filter.value));
+          }
+        }
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      const [result] = await query;
+      return result?.count || 0;
     } catch (error) {
-      console.error('Error getting provider banking (redacted):', error);
-      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error counting practice documents:', error);
+      throw new Error(`Failed to count practice documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  // PRIVILEGED ACCESS: Returns decrypted banking data with role validation
-  async getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
-    try {
-      // Validate privileged access
-      validatePrivilegedAccess(userId, role, 'getProviderBankingDecrypted');
-      
-      const db = await this.getDb();
-      const [result] = await db.select().from(providerBanking).where(eq(providerBanking.id, id));
-      if (!result) return null;
-      
-      // Decrypt sensitive fields for privileged access
-      return decryptBankingData(result, { userId, role, autoMigrate: true });
-    } catch (error) {
-      console.error('Error getting provider banking (decrypted):', error);
-      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  // SECURE DEFAULT: Returns redacted banking data by physician
-  async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
-    try {
-      const db = await this.getDb();
-      const [result] = await db.select().from(providerBanking).where(
-        and(
-          eq(providerBanking.physicianId, physicianId),
-          eq(providerBanking.isActive, true)
-        )
-      );
-      if (!result) return null;
-      
-      // Return redacted version for secure display (default behavior)
-      return redactBankingData(result);
-    } catch (error) {
-      console.error('Error getting provider banking by physician (redacted):', error);
-      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  // PRIVILEGED ACCESS: Returns decrypted banking data by physician with role validation
-  async getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
-    try {
-      // Validate privileged access
-      validatePrivilegedAccess(userId, role, 'getProviderBankingByPhysicianDecrypted');
-      
-      const db = await this.getDb();
-      const [result] = await db.select().from(providerBanking).where(
-        and(
-          eq(providerBanking.physicianId, physicianId),
-          eq(providerBanking.isActive, true)
-        )
-      );
-      if (!result) return null;
-      
-      // Decrypt sensitive fields for privileged access
-      return decryptBankingData(result, { userId, role, autoMigrate: true });
-    } catch (error) {
-      console.error('Error getting provider banking by physician (decrypted):', error);
-      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
+  async updatePracticeDocument(id: string, updates: Partial<InsertPracticeDocument>): Promise<SelectPracticeDocument> {
     try {
       const db = await this.getDb();
       
-      // Encrypt sensitive fields if they're being updated using enhanced encryption
-      const encryptedUpdates = {
+      const updatedDocument = {
         ...updates,
         updatedAt: new Date()
       };
       
-      if (updates.routingNumber !== undefined) {
-        encryptedUpdates.routingNumber = updates.routingNumber ? encrypt(updates.routingNumber, { dataType: 'banking' }) : updates.routingNumber;
-      }
-      if (updates.accountNumber !== undefined) {
-        encryptedUpdates.accountNumber = updates.accountNumber ? encrypt(updates.accountNumber, { dataType: 'banking' }) : updates.accountNumber;
-      }
-      
       const [result] = await db
-        .update(providerBanking)
-        .set(encryptedUpdates)
-        .where(eq(providerBanking.id, id))
+        .update(practiceDocuments)
+        .set(updatedDocument)
+        .where(eq(practiceDocuments.id, id))
         .returning();
       
       if (!result) {
-        throw new Error('Provider banking not found');
+        throw new Error('Practice document not found');
       }
       
-      // Return redacted data by default for security
-      return redactBankingData(result);
+      return result;
     } catch (error) {
-      console.error('Error updating provider banking:', error);
-      throw new Error(`Failed to update provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error updating practice document:', error);
+      throw new Error(`Failed to update practice document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-
-
-  async deleteProviderBanking(id: string): Promise<void> {
+  async deletePracticeDocument(id: string): Promise<void> {
     try {
       const db = await this.getDb();
-      await db.delete(providerBanking).where(eq(providerBanking.id, id));
+      await db.delete(practiceDocuments).where(eq(practiceDocuments.id, id));
     } catch (error) {
-      console.error('Error deleting provider banking:', error);
-      throw new Error(`Failed to delete provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Helper method to decrypt sensitive banking data fields
-   */
-  private decryptBankingData(banking: SelectProviderBanking): SelectProviderBanking {
-    try {
-      return {
-        ...banking,
-        routingNumber: banking.routingNumber ? decrypt(banking.routingNumber) : banking.routingNumber,
-        accountNumber: banking.accountNumber ? decrypt(banking.accountNumber) : banking.accountNumber
-      };
-    } catch (error) {
-      console.error('Error decrypting banking data - data may be corrupted or using old encryption:', error);
-      // For backward compatibility, if decryption fails, return original data
-      // In production, you might want to handle this differently
-      return banking;
+      console.error('Error deleting practice document:', error);
+      throw new Error(`Failed to delete practice document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -4201,7 +4206,6 @@ export class PostgreSQLStorage implements IStorage {
     deaRegistrations: SelectDeaRegistration[];
     csrLicenses: SelectCsrLicense[];
     licenseDocuments: SelectLicenseDocument[];
-    providerBanking: SelectProviderBanking | null;
     professionalReferences: SelectProfessionalReference[];
     payerEnrollments: SelectPayerEnrollment[];
   }> {
@@ -4218,7 +4222,6 @@ export class PostgreSQLStorage implements IStorage {
         deaRegistrations,
         csrLicenses,
         licenseDocuments,
-        providerBanking,
         professionalReferences,
         payerEnrollments
       ] = await Promise.all([
@@ -4233,7 +4236,6 @@ export class PostgreSQLStorage implements IStorage {
         this.getDeaRegistrationsByPhysician(physicianId),
         this.getCsrLicensesByPhysician(physicianId),
         this.getLicenseDocumentsByPhysician(physicianId),
-        this.getProviderBanking ? await this.getProviderBanking((await this.getPhysician(physicianId))?.id || '') : null,
         this.getProfessionalReferencesByPhysician(physicianId),
         this.getPayerEnrollmentsByPhysician(physicianId)
       ]);
@@ -4250,7 +4252,6 @@ export class PostgreSQLStorage implements IStorage {
         deaRegistrations,
         csrLicenses,
         licenseDocuments,
-        providerBanking,
         professionalReferences,
         payerEnrollments
       };
