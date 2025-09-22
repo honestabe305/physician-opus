@@ -1,0 +1,37 @@
+
+Warning: validateDOMNesting(...): <div> cannot appear as a descendant of &lt;p&gt;.
+    at div
+    at Skeleton (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/skeleton.tsx:22:21)
+    at p
+    at _c6 (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/card.tsx:77:65)
+    at div
+    at div
+    at div
+    at _c2 (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/card.tsx:41:60)
+    at div
+    at _c (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/card.tsx:23:53)
+    at div
+    at DemographicsPage (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/pages/DemographicsPage.tsx:37:41)
+    at Route (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:206:16)
+    at Switch (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:262:17)
+    at Suspense
+    at main
+    at div
+    at div
+    at div
+    at Provider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=0ae28600:38:15)
+    at TooltipProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=0ae28600:65:5)
+    at https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/sidebar.tsx:50:72
+    at Layout (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/Layout.tsx?t=1758559052853:32:34)
+    at ProtectedRoute (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ProtectedRoute.tsx?t=1758559052853:26:42)
+    at Route (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:206:16)
+    at Switch (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:262:17)
+    at Suspense
+    at RouteMonitor (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/RouteMonitor.tsx?t=1758559816808:188:36)
+    at Router (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:161:17)
+    at Provider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=0ae28600:38:15)
+    at TooltipProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=0ae28600:65:5)
+    at ThemeProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/contexts/ThemeContext.tsx:35:33)
+    at AuthProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/contexts/AuthContext.tsx?t=1758559052853:38:32)
+    at QueryClientProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@tanstack_react-query.js?v=0ae28600:2934:3)
+    at App
