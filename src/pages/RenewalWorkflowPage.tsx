@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Filter, RefreshCw, FileText, Clock, CheckCircle } from "lucide-react";
+import { Plus, Search, Filter, RefreshCw, FileText, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { type SelectRenewalWorkflow, type SelectPhysician } from "../../shared/schema";
 
 export default function RenewalWorkflowPage() {
@@ -30,7 +30,7 @@ export default function RenewalWorkflowPage() {
   const { toast } = useToast();
 
   // Fetch renewal statistics
-  const { data: statistics, isLoading: statsLoading, refetch: refetchStats } = useQuery<{
+  const { data: statistics, isLoading: statsLoading, refetch: refetchStats, error: statsError } = useQuery<{
     total: number;
     inProgress: number;
     pending: number;
@@ -41,12 +41,30 @@ export default function RenewalWorkflowPage() {
     upcomingIn90Days: number;
   }>({
     queryKey: ['/api/renewal/statistics'],
-    refetchInterval: 30000 // Refresh every 30 seconds
+    retry: 3,
+    refetchInterval: 30000, // Refresh every 30 seconds
+    onError: (error) => {
+      console.error('Error fetching renewal statistics:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load renewal statistics. Please refresh the page.",
+        variant: "destructive"
+      });
+    }
   });
 
   // Fetch upcoming renewals
-  const { data: upcomingRenewals, isLoading: renewalsLoading, refetch: refetchRenewals } = useQuery<SelectRenewalWorkflow[]>({
-    queryKey: ['/api/renewal/upcoming', { days: 90 }]
+  const { data: upcomingRenewals, isLoading: renewalsLoading, refetch: refetchRenewals, error: renewalsError } = useQuery<SelectRenewalWorkflow[]>({
+    queryKey: ['/api/renewal/upcoming', { days: 90 }],
+    retry: 3,
+    onError: (error) => {
+      console.error('Error fetching upcoming renewals:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to load renewal workflows. Please refresh the page.",
+        variant: "destructive"
+      });
+    }
   });
 
   // Fetch all physicians for display
@@ -168,15 +186,63 @@ export default function RenewalWorkflowPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // Debug logging
+  console.log('RenewalWorkflowPage Debug:', {
+    statsLoading,
+    renewalsLoading,
+    statistics,
+    upcomingRenewals: upcomingRenewals?.length || 0,
+    statsError,
+    renewalsError
+  });
+
   if (statsLoading || renewalsLoading) {
     return (
       <div className="container mx-auto py-6 space-y-6" data-testid="page-loading">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-10 w-24" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(8)].map((_, i) => (
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // Show error states
+  if (statsError || renewalsError) {
+    return (
+      <div className="container mx-auto py-6 space-y-6" data-testid="page-error">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Renewal Workflows</h1>
+            <p className="text-muted-foreground">
+              Manage license, DEA, and CSR renewal processes
+            </p>
+          </div>
+          <Button onClick={handleRefresh} variant="outline" data-testid="button-refresh-all">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load renewal workflow data. Please try refreshing the page or contact support if the issue persists.
+            <br />
+            <small className="text-xs opacity-70">
+              {statsError && `Statistics: ${statsError.message}`}
+              {renewalsError && `Renewals: ${renewalsError.message}`}
+            </small>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -211,6 +277,18 @@ export default function RenewalWorkflowPage() {
         }} 
         loading={statsLoading}
       />
+      
+      {/* Debug Info (remove in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <Alert className="bg-blue-50 border-blue-200">
+          <AlertDescription className="text-xs">
+            <strong>Debug Info:</strong> 
+            Statistics: {statistics ? 'loaded' : 'null'}, 
+            Renewals: {upcomingRenewals ? `${upcomingRenewals.length} items` : 'null'}, 
+            Filtered: {filteredRenewals ? `${filteredRenewals.length} items` : 'null'}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Renewal Workflows List and Details */}
       <Tabs defaultValue="list" className="w-full">
@@ -265,10 +343,32 @@ export default function RenewalWorkflowPage() {
               </div>
 
               {/* Workflows Grid */}
-              {filteredRenewals?.length === 0 ? (
+              {!upcomingRenewals || upcomingRenewals.length === 0 ? (
                 <Alert data-testid="alert-no-workflows">
+                  <FileText className="h-4 w-4" />
                   <AlertDescription>
-                    No renewal workflows found matching your criteria.
+                    <div className="space-y-2">
+                      <p className="font-medium">No renewal workflows found</p>
+                      {!upcomingRenewals ? (
+                        <p className="text-sm">Loading renewal data...</p>
+                      ) : searchTerm || statusFilter !== 'all' ? (
+                        <p className="text-sm">Try adjusting your filters to see more results.</p>
+                      ) : (
+                        <div className="text-sm space-y-1">
+                          <p>No upcoming renewals in the next 90 days.</p>
+                          <p className="text-xs text-muted-foreground">
+                            Renewal workflows are automatically created 90 days before expiration dates.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : filteredRenewals?.length === 0 ? (
+                <Alert data-testid="alert-no-filtered-workflows">
+                  <AlertDescription>
+                    No renewal workflows match your current filters. 
+                    Found {upcomingRenewals.length} total workflows.
                   </AlertDescription>
                 </Alert>
               ) : (
