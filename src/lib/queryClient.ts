@@ -13,6 +13,7 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+    credentials: 'include', // Include authentication cookies
     ...options,
   };
 
