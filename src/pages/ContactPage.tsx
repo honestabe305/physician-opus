@@ -83,7 +83,7 @@ export default function ContactPage() {
     },
   });
 
-  const physicians = physiciansData?.physicians || [];
+  const physicians = physiciansData?.data || [];
 
   // Calculate contact statistics
   const contactStats = useMemo(() => {

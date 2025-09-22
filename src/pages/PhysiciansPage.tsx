@@ -61,7 +61,7 @@ export default function PhysiciansPage() {
   });
 
   // Fetch document counts for each physician
-  const physicians = (physiciansData as any)?.physicians || [];
+  const physicians = (physiciansData as any)?.data || [];
   
   // Pagination logic
   const itemsPerPage = preferences.itemsPerPage;
