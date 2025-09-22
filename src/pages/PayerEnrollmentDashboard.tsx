@@ -71,7 +71,7 @@ export default function PayerEnrollmentDashboard() {
   const [payerFilter, setPayerFilter] = useState("all");
 
   // Optimized queries using server-side aggregations for better performance
-  const { data: dashboardData, isLoading, error, refetch } = useQuery({
+  const { data: dashboardData, isLoading, error, refetch } = useQuery<DashboardData>({
     queryKey: ['/api/dashboard/data'],
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
