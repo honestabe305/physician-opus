@@ -64,8 +64,14 @@ export default function NewPhysicianPage() {
   const { toast } = useToast();
 
   // Fetch practices for dropdown
-  const { data: practices = [] } = useQuery<SelectPractice[]>({
+  const { data: practices = [] } = useQuery({
     queryKey: ['/practices'],
+    select: (res) => 
+      Array.isArray(res) ? res : 
+      Array.isArray(res?.practices) ? res.practices : 
+      Array.isArray(res?.data?.practices) ? res.data.practices : 
+      Array.isArray(res?.items) ? res.items : 
+      []
   });
 
   // Fetch physicians to calculate practice assignments
@@ -98,7 +104,9 @@ export default function NewPhysicianPage() {
       }
     });
     
-    return practices.map(practice => ({
+    // Additional safety: ensure practices is always an array
+    const safePractices = Array.isArray(practices) ? practices : [];
+    return safePractices.map(practice => ({
       ...practice,
       physicianCount: practicePhysicianCounts.get(practice.id) || 0,
       locations: Array.from(practiceLocations.get(practice.id) || []),

@@ -137,7 +137,7 @@ export default function PhysiciansPage() {
               <CardTitle>Clinician Directory</CardTitle>
               <CardDescription>
                 {isLoading ? (
-                  <Skeleton className="h-4 w-32" />
+                  <span className="inline-block h-4 w-32 bg-muted rounded animate-pulse" />
                 ) : (
                   `${physicians.length} clinician${physicians.length !== 1 ? 's' : ''}`
                 )}
