@@ -74,6 +74,18 @@ import {
   type SelectPayerEnrollment,
   type InsertPayerEnrollment,
 } from '../shared/schema';
+import {
+  type RenewalStatus,
+  type EnrollmentStatus,
+  type NotificationType,
+  type ProviderRole,
+  type GenericStatus,
+  validateRenewalStatus,
+  validateEnrollmentStatus,
+  validateNotificationType,
+  validateProviderRole,
+  validateGenericStatus,
+} from '../shared/enum-validation';
 import { MemoryStorage } from './memoryStorage';
 
 // Storage factory - chooses between PostgreSQL and in-memory based on environment
@@ -128,7 +140,7 @@ export interface IStorage {
   deletePhysician(id: string): Promise<void>;
   getAllPhysicians(): Promise<SelectPhysician[]>;
   searchPhysicians(query: string): Promise<SelectPhysician[]>;
-  getPhysiciansByStatus(status: string): Promise<SelectPhysician[]>;
+  getPhysiciansByStatus(status: GenericStatus): Promise<SelectPhysician[]>;
 
   // Physician License operations
   createPhysicianLicense(license: InsertPhysicianLicense): Promise<SelectPhysicianLicense>;
@@ -234,7 +246,7 @@ export interface IStorage {
   // Role Policy operations
   createRolePolicy(policy: InsertRolePolicy): Promise<SelectRolePolicy>;
   getRolePolicy(id: string): Promise<SelectRolePolicy | null>;
-  getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null>;
+  getRolePolicyByRoleAndState(role: ProviderRole, state: string): Promise<SelectRolePolicy | null>;
   getAllRolePolicies(): Promise<SelectRolePolicy[]>;
   updateRolePolicy(id: string, updates: Partial<InsertRolePolicy>): Promise<SelectRolePolicy>;
   deleteRolePolicy(id: string): Promise<void>;
@@ -262,7 +274,7 @@ export interface IStorage {
   markNotificationRead(id: string): Promise<SelectNotification>;
   deleteNotification(id: string): Promise<void>;
   deleteOldNotifications(olderThan: Date): Promise<void>;
-  getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]>;
+  getNotificationsByType(type: NotificationType): Promise<SelectNotification[]>;
 
   // Renewal Workflow operations
   createRenewalWorkflow(workflow: InsertRenewalWorkflow): Promise<SelectRenewalWorkflow>;
@@ -272,7 +284,7 @@ export interface IStorage {
   getActiveRenewalWorkflows(): Promise<SelectRenewalWorkflow[]>;
   getUpcomingRenewals(days: number): Promise<SelectRenewalWorkflow[]>;
   updateRenewalWorkflow(id: string, updates: Partial<InsertRenewalWorkflow>): Promise<SelectRenewalWorkflow>;
-  updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow>;
+  updateRenewalStatus(id: string, status: RenewalStatus): Promise<SelectRenewalWorkflow>;
   updateRenewalProgress(id: string, progress: number, checklist?: any): Promise<SelectRenewalWorkflow>;
   deleteRenewalWorkflow(id: string): Promise<void>;
 
@@ -317,10 +329,10 @@ export interface IStorage {
   getPayerEnrollmentsByPhysician(physicianId: string): Promise<SelectPayerEnrollment[]>;
   getPayerEnrollmentsByPayer(payerId: string): Promise<SelectPayerEnrollment[]>;
   getPayerEnrollmentsByLocation(locationId: string): Promise<SelectPayerEnrollment[]>;
-  getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByStatus(status: EnrollmentStatus): Promise<SelectPayerEnrollment[]>;
   getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]>;
   updatePayerEnrollment(id: string, updates: Partial<InsertPayerEnrollment>): Promise<SelectPayerEnrollment>;
-  updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment>;
+  updateEnrollmentStatus(id: string, status: EnrollmentStatus): Promise<SelectPayerEnrollment>;
   updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment>;
   deletePayerEnrollment(id: string): Promise<void>;
 
@@ -646,10 +658,13 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async getPhysiciansByStatus(status: string): Promise<SelectPhysician[]> {
+  async getPhysiciansByStatus(status: GenericStatus): Promise<SelectPhysician[]> {
     try {
+      // Validate enum value
+      const validatedStatus = validateGenericStatus(status);
+      
       const db = await this.getDb();
-      return await db.select().from(physicians).where(eq(physicians.status, status));
+      return await db.select().from(physicians).where(eq(physicians.status, validatedStatus));
     } catch (error) {
       console.error('Error getting physicians by status:', error);
       throw new Error(`Failed to get physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1718,15 +1733,18 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null> {
+  async getRolePolicyByRoleAndState(role: ProviderRole, state: string): Promise<SelectRolePolicy | null> {
     try {
+      // Validate enum value
+      const validatedRole = validateProviderRole(role);
+      
       const db = await this.getDb();
       const [result] = await db
         .select()
         .from(rolePolicies)
         .where(
           and(
-            eq(rolePolicies.role, role),
+            eq(rolePolicies.role, validatedRole),
             eq(rolePolicies.state, state)
           )
         );
@@ -2003,11 +2021,14 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]> {
+  async getNotificationsByType(type: NotificationType): Promise<SelectNotification[]> {
     try {
+      // Validate enum value
+      const validatedType = validateNotificationType(type);
+      
       const db = await this.getDb();
       return await db.select().from(notifications)
-        .where(eq(notifications.type, type))
+        .where(eq(notifications.type, validatedType))
         .orderBy(notifications.notificationDate);
     } catch (error) {
       console.error('Error getting notifications by type:', error);
@@ -2254,13 +2275,16 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow> {
+  async updateRenewalStatus(id: string, status: RenewalStatus): Promise<SelectRenewalWorkflow> {
     try {
+      // Validate enum value
+      const validatedStatus = validateRenewalStatus(status);
+      
       const db = await this.getDb();
       const statusDate: any = {};
       
       // Set appropriate date based on status
-      switch(status) {
+      switch(validatedStatus) {
         case 'filed':
           statusDate.filedDate = new Date();
           break;
@@ -2278,7 +2302,7 @@ export class PostgreSQLStorage implements IStorage {
       const [result] = await db
         .update(renewalWorkflows)
         .set({ 
-          renewalStatus: status, 
+          renewalStatus: validatedStatus, 
           ...statusDate,
           updatedAt: new Date() 
         })
@@ -2792,10 +2816,13 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]> {
+  async getPayerEnrollmentsByStatus(status: EnrollmentStatus): Promise<SelectPayerEnrollment[]> {
     try {
+      // Validate enum value
+      const validatedStatus = validateEnrollmentStatus(status);
+      
       const db = await this.getDb();
-      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status as 'discovery' | 'data_complete' | 'submitted' | 'payer_processing' | 'approved' | 'active' | 'stopped' | 'denied'));
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, validatedStatus));
     } catch (error) {
       console.error('Error getting payer enrollments by status:', error);
       throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2839,13 +2866,16 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
-  async updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment> {
+  async updateEnrollmentStatus(id: string, status: EnrollmentStatus): Promise<SelectPayerEnrollment> {
     try {
+      // Validate enum value
+      const validatedStatus = validateEnrollmentStatus(status);
+      
       const db = await this.getDb();
       const [result] = await db
         .update(payerEnrollments)
         .set({ 
-          enrollmentStatus: status as any,
+          enrollmentStatus: validatedStatus,
           updatedAt: new Date() 
         })
         .where(eq(payerEnrollments.id, id))

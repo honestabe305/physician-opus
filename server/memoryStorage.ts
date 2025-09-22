@@ -50,6 +50,18 @@ import {
   type SelectPayerEnrollment,
   type InsertPayerEnrollment,
 } from '../shared/schema';
+import {
+  type RenewalStatus,
+  type EnrollmentStatus,
+  type NotificationType,
+  type ProviderRole,
+  type GenericStatus,
+  validateRenewalStatus,
+  validateEnrollmentStatus,
+  validateNotificationType,
+  validateProviderRole,
+  validateGenericStatus,
+} from '../shared/enum-validation';
 
 // Simple in-memory storage implementation
 export class MemoryStorage implements IStorage {
@@ -195,8 +207,10 @@ export class MemoryStorage implements IStorage {
     );
   }
 
-  async getPhysiciansByStatus(status: string): Promise<SelectPhysician[]> {
-    return this.physicians.filter(p => p.status === status);
+  async getPhysiciansByStatus(status: GenericStatus): Promise<SelectPhysician[]> {
+    // Validate enum value
+    const validatedStatus = validateGenericStatus(status);
+    return this.physicians.filter(p => p.status === validatedStatus);
   }
 
   // License operations
@@ -809,8 +823,10 @@ export class MemoryStorage implements IStorage {
     return this.rolePolicies.find(r => r.id === id) || null;
   }
 
-  async getRolePolicyByRoleAndState(role: 'physician' | 'pa' | 'np', state: string): Promise<SelectRolePolicy | null> {
-    return this.rolePolicies.find(r => r.role === role && r.state === state) || null;
+  async getRolePolicyByRoleAndState(role: ProviderRole, state: string): Promise<SelectRolePolicy | null> {
+    // Validate enum value
+    const validatedRole = validateProviderRole(role);
+    return this.rolePolicies.find(r => r.role === validatedRole && r.state === state) || null;
   }
 
   async getAllRolePolicies(): Promise<SelectRolePolicy[]> {
@@ -1329,8 +1345,10 @@ export class MemoryStorage implements IStorage {
     return this.payerEnrollments.filter(e => e.practiceLocationId === locationId);
   }
 
-  async getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]> {
-    return this.payerEnrollments.filter(e => e.enrollmentStatus === status);
+  async getPayerEnrollmentsByStatus(status: EnrollmentStatus): Promise<SelectPayerEnrollment[]> {
+    // Validate enum value
+    const validatedStatus = validateEnrollmentStatus(status);
+    return this.payerEnrollments.filter(e => e.enrollmentStatus === validatedStatus);
   }
 
   async getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]> {
@@ -1357,8 +1375,10 @@ export class MemoryStorage implements IStorage {
     return this.payerEnrollments[index];
   }
 
-  async updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment> {
-    return this.updatePayerEnrollment(id, { enrollmentStatus: status as any });
+  async updateEnrollmentStatus(id: string, status: EnrollmentStatus): Promise<SelectPayerEnrollment> {
+    // Validate enum value
+    const validatedStatus = validateEnrollmentStatus(status);
+    return this.updatePayerEnrollment(id, { enrollmentStatus: validatedStatus });
   }
 
   async updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment> {
@@ -1456,8 +1476,10 @@ export class MemoryStorage implements IStorage {
     );
   }
 
-  async getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]> {
-    return this.notifications.filter(n => n.type === type);
+  async getNotificationsByType(type: NotificationType): Promise<SelectNotification[]> {
+    // Validate enum value
+    const validatedType = validateNotificationType(type);
+    return this.notifications.filter(n => n.type === validatedType);
   }
 
   // Renewal Workflow operations
@@ -1533,10 +1555,13 @@ export class MemoryStorage implements IStorage {
     return this.renewalWorkflows[index];
   }
 
-  async updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow> {
-    const updates: any = { renewalStatus: status };
+  async updateRenewalStatus(id: string, status: RenewalStatus): Promise<SelectRenewalWorkflow> {
+    // Validate enum value
+    const validatedStatus = validateRenewalStatus(status);
     
-    if (status === 'approved') {
+    const updates: any = { renewalStatus: validatedStatus };
+    
+    if (validatedStatus === 'approved') {
       updates.approvalDate = new Date();
       updates.progressPercentage = 100;
     }

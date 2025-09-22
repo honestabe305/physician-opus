@@ -32,6 +32,20 @@ import {
   type SelectNotification
 } from '../shared/schema';
 import { z } from 'zod';
+import {
+  renewalStatusSchema,
+  enrollmentStatusSchema,
+  notificationTypeSchema,
+  providerRoleSchema,
+  genericStatusSchema,
+  documentTypeSchema,
+  validateRenewalStatus,
+  validateEnrollmentStatus,
+  validateNotificationType,
+  validateProviderRole,
+  validateGenericStatus,
+  validateDocumentType,
+} from '../shared/enum-validation';
 import { ObjectStorageService, ObjectNotFoundError } from './objectStorage';
 import {
   hashPassword,
@@ -1045,7 +1059,9 @@ router.get('/physicians', asyncHandler(async (req: any, res: any) => {
   if (search) {
     physicians = await storage.searchPhysicians(search as string);
   } else if (status) {
-    physicians = await storage.getPhysiciansByStatus(status as string);
+    // Validate status using enum validation
+    const validatedStatus = validateGenericStatus(status);
+    physicians = await storage.getPhysiciansByStatus(validatedStatus);
   } else {
     physicians = await storage.getAllPhysicians();
   }
@@ -1895,6 +1911,12 @@ router.post('/documents/upload', authMiddleware, upload.single('document'), asyn
   }
 
   try {
+    validateDocumentType(documentType);
+  } catch (error) {
+    return res.status(400).json({ error: `Invalid documentType: ${(error as Error).message}` });
+  }
+
+  try {
     const document = await documentService.uploadDocument(
       physicianId,
       documentType,
@@ -1935,6 +1957,12 @@ router.get('/documents/physician/:id', authMiddleware, asyncHandler(async (req: 
 // GET /api/documents/:id/history - Get version history
 router.get('/documents/:physicianId/history/:documentType', authMiddleware, asyncHandler(async (req: any, res: any) => {
   const { physicianId, documentType } = req.params;
+  
+  try {
+    validateDocumentType(documentType);
+  } catch (error) {
+    return res.status(400).json({ error: `Invalid documentType: ${(error as Error).message}` });
+  }
   
   const history = await documentService.getDocumentHistory(physicianId, documentType);
   res.json(history);
@@ -2026,8 +2054,10 @@ router.post('/renewal/initiate', authMiddleware, asyncHandler(async (req: any, r
     return res.status(400).json({ error: 'physicianId, entityType, and entityId are required' });
   }
   
-  if (!['license', 'dea', 'csr'].includes(entityType)) {
-    return res.status(400).json({ error: 'entityType must be license, dea, or csr' });
+  try {
+    validateNotificationType(entityType);
+  } catch (error) {
+    return res.status(400).json({ error: `Invalid entityType: ${(error as Error).message}` });
   }
   
   try {
@@ -2074,9 +2104,10 @@ router.put('/renewal/:id/status', authMiddleware, asyncHandler(async (req: any, 
     return res.status(400).json({ error: 'status is required' });
   }
   
-  const validStatuses = ['not_started', 'in_progress', 'filed', 'under_review', 'approved', 'rejected', 'expired'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  try {
+    validateRenewalStatus(status);
+  } catch (error) {
+    return res.status(400).json({ error: `Invalid renewal status: ${(error as Error).message}` });
   }
   
   try {
