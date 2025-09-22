@@ -508,14 +508,47 @@ export default function ProfessionalReferencesPage() {
                           <SelectValue placeholder="Select physician" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
-                        {physicians?.map((physician) => (
-                          <SelectItem key={physician.id} value={physician.id}>
-                            {physician.fullLegalName}
+                      <SelectContent className="max-h-60">
+                        <div className="sticky top-0 bg-background p-2 border-b">
+                          <Input
+                            placeholder="Search physicians..."
+                            onChange={(e) => {
+                              // Filter functionality will be handled by the select content
+                              const searchTerm = e.target.value.toLowerCase();
+                              const items = document.querySelectorAll('[data-radix-select-item]');
+                              items.forEach((item) => {
+                                const text = item.textContent?.toLowerCase() || '';
+                                const shouldShow = text.includes(searchTerm);
+                                (item as HTMLElement).style.display = shouldShow ? 'flex' : 'none';
+                              });
+                            }}
+                            className="h-8"
+                          />
+                        </div>
+                        {physicians?.length === 0 ? (
+                          <SelectItem value="no-physicians" disabled>
+                            No physicians available
                           </SelectItem>
-                        ))}
+                        ) : (
+                          physicians?.map((physician) => (
+                            <SelectItem key={physician.id} value={physician.id}>
+                              <div className="flex flex-col gap-1 py-1">
+                                <div className="font-medium">{physician.fullLegalName}</div>
+                                {physician.npi && (
+                                  <div className="text-xs text-muted-foreground">NPI: {physician.npi}</div>
+                                )}
+                                {physician.emailAddress && (
+                                  <div className="text-xs text-muted-foreground">{physician.emailAddress}</div>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
+                    <FormDescription>
+                      Search and select the physician for this professional reference
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
