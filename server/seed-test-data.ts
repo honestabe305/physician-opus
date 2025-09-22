@@ -17,6 +17,41 @@ async function seedTestData() {
     const physicians = [
       {
         id: crypto.randomUUID(),
+        fullLegalName: 'Dr. Amanda Nicole Davis',
+        emailAddress: 'amanda.davis@medicalpractice.com',
+        phoneNumbers: ['555-0199', '555-0198'],
+        npi: '1987654321',
+        status: 'active',
+        providerRole: 'physician' as const,
+        clinicianType: 'md' as const,
+        homeAddress: '456 Maple Drive, Austin, TX 78701',
+        mailingAddress: '789 Professional Plaza, Suite 301, Austin, TX 78701',
+        dateOfBirth: '1985-07-12',
+        gender: 'female' as const,
+        ssn: '987-65-4321',
+        tin: '98-7654321',
+        deaNumber: 'AD9876543',
+        caqhId: 'CAQ987654',
+        practiceName: 'Austin Family Medicine Center',
+        primaryPracticeAddress: '1200 Medical Center Blvd, Austin, TX 78701',
+        secondaryPracticeAddresses: '2400 North Lamar Blvd, Austin, TX 78705',
+        officePhone: '512-555-0199',
+        officeFax: '512-555-0200',
+        officeContactPerson: 'Maria Rodriguez',
+        groupNpi: '1122334455',
+        groupTaxId: '12-3456789',
+        malpracticeCarrier: 'Medical Protective Insurance',
+        malpracticePolicyNumber: 'MP987654321',
+        coverageLimits: '$1M/$3M',
+        malpracticeExpirationDate: addYears(today, 1),
+        emergencyContact: {
+          name: 'Dr. Michael Davis',
+          phone: '555-0301',
+          relationship: 'Spouse'
+        }
+      },
+      {
+        id: crypto.randomUUID(),
         fullLegalName: 'John Smith',
         emailAddress: 'john.smith@example.com',
         phoneNumbers: ['555-0101'],
@@ -304,6 +339,238 @@ async function seedTestData() {
       console.log(`✅ Created renewal workflow for DEA registration ${dea.id}`);
     }
     
+    // Add comprehensive education records for Dr. Amanda Nicole Davis
+    const amandaDavis = createdPhysicians.find(p => p.fullLegalName === 'Dr. Amanda Nicole Davis');
+    if (amandaDavis) {
+      // Medical School
+      await storage.createPhysicianEducation({
+        physicianId: amandaDavis.id,
+        educationType: 'medical_school',
+        institutionName: 'University of Texas Southwestern Medical School',
+        specialty: 'Doctor of Medicine',
+        location: 'Dallas, TX',
+        startDate: '2003-08-15',
+        completionDate: '2007-05-20',
+        graduationYear: 2007
+      });
+
+      // Residency
+      await storage.createPhysicianEducation({
+        physicianId: amandaDavis.id,
+        educationType: 'residency',
+        institutionName: 'Baylor College of Medicine',
+        specialty: 'Family Medicine',
+        location: 'Houston, TX',
+        startDate: '2007-07-01',
+        completionDate: '2010-06-30'
+      });
+
+      // Fellowship
+      await storage.createPhysicianEducation({
+        physicianId: amandaDavis.id,
+        educationType: 'fellowship',
+        institutionName: 'Mayo Clinic',
+        specialty: 'Sports Medicine',
+        location: 'Rochester, MN',
+        startDate: '2010-07-01',
+        completionDate: '2011-06-30'
+      });
+
+      console.log(`✅ Created education records for ${amandaDavis.fullLegalName}`);
+
+      // Add work history for Dr. Amanda Nicole Davis
+      await storage.createPhysicianWorkHistory({
+        physicianId: amandaDavis.id,
+        employerName: 'Austin Sports Medicine Clinic',
+        position: 'Sports Medicine Physician',
+        startDate: '2011-07-01',
+        endDate: '2015-12-31',
+        address: '3400 Guadalupe St, Austin, TX 78705',
+        supervisorName: 'Dr. Robert Johnson, MD',
+        reasonForLeaving: 'Career advancement'
+      });
+
+      await storage.createPhysicianWorkHistory({
+        physicianId: amandaDavis.id,
+        employerName: 'Dell Seton Medical Center',
+        position: 'Emergency Medicine Physician',
+        startDate: '2016-01-01',
+        endDate: '2019-06-30',
+        address: '1501 Red River St, Austin, TX 78701',
+        supervisorName: 'Dr. Sarah Wilson, MD',
+        reasonForLeaving: 'Started private practice'
+      });
+
+      await storage.createPhysicianWorkHistory({
+        physicianId: amandaDavis.id,
+        employerName: 'Austin Family Medicine Center',
+        position: 'Family Medicine Physician & Practice Owner',
+        startDate: '2019-07-01',
+        endDate: null,
+        address: '1200 Medical Center Blvd, Austin, TX 78701',
+        supervisorName: 'Self-employed',
+        reasonForLeaving: null
+      });
+
+      console.log(`✅ Created work history for ${amandaDavis.fullLegalName}`);
+
+      // Add hospital affiliations
+      await storage.createPhysicianHospitalAffiliation({
+        physicianId: amandaDavis.id,
+        hospitalName: 'St. David\'s Medical Center',
+        privileges: ['Admitting', 'Surgery', 'Emergency'],
+        startDate: '2019-07-01',
+        endDate: null,
+        status: 'active'
+      });
+
+      await storage.createPhysicianHospitalAffiliation({
+        physicianId: amandaDavis.id,
+        hospitalName: 'Dell Children\'s Medical Center',
+        privileges: ['Consulting', 'Admitting'],
+        startDate: '2020-01-01',
+        endDate: null,
+        status: 'active'
+      });
+
+      console.log(`✅ Created hospital affiliations for ${amandaDavis.fullLegalName}`);
+
+      // Add compliance record
+      await storage.createPhysicianCompliance({
+        physicianId: amandaDavis.id,
+        backgroundCheckCompleted: true,
+        backgroundCheckDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+        tbTestCompleted: true,
+        tbTestDate: format(subDays(today, 45), 'yyyy-MM-dd'),
+        vaccinationsCompleted: true,
+        vaccinationRecords: ['COVID-19', 'Influenza', 'Hepatitis B', 'MMR', 'Varicella'],
+        continuingEducationHours: 50,
+        lastEducationUpdate: format(subDays(today, 15), 'yyyy-MM-dd'),
+        malpracticeInsuranceActive: true,
+        malpracticeInsuranceExpiry: format(addMonths(today, 10), 'yyyy-MM-dd'),
+        boardCertificationActive: true,
+        boardCertificationExpiry: format(addYears(today, 3), 'yyyy-MM-dd'),
+        licenseRevocations: false,
+        licenseRevocationsExplanation: null,
+        malpracticeClaims: false,
+        malpracticeClaimsExplanation: null,
+        pendingInvestigations: false,
+        pendingInvestigationsExplanation: null,
+        medicareSanctions: false,
+        medicareSanctionsExplanation: null,
+        deaCertificateActive: true
+      });
+
+      console.log(`✅ Created compliance record for ${amandaDavis.fullLegalName}`);
+
+      // Add specific licenses for Dr. Amanda Nicole Davis
+      await storage.createPhysicianLicense({
+        physicianId: amandaDavis.id,
+        state: 'TX',
+        licenseNumber: 'TX-MD-987654',
+        issueDate: format(subYears(today, 5), 'yyyy-MM-dd'),
+        expirationDate: format(addYears(today, 2), 'yyyy-MM-dd'),
+        status: 'active',
+        licenseType: 'Medical License',
+        verificationDate: format(subDays(today, 10), 'yyyy-MM-dd'),
+        notes: 'Full unrestricted medical license'
+      });
+
+      await storage.createPhysicianLicense({
+        physicianId: amandaDavis.id,
+        state: 'CA',
+        licenseNumber: 'CA-MD-123789',
+        issueDate: format(subYears(today, 3), 'yyyy-MM-dd'),
+        expirationDate: format(addMonths(today, 8), 'yyyy-MM-dd'),
+        status: 'active',
+        licenseType: 'Medical License',
+        verificationDate: format(subDays(today, 20), 'yyyy-MM-dd'),
+        notes: 'Interstate medical license'
+      });
+
+      console.log(`✅ Created medical licenses for ${amandaDavis.fullLegalName}`);
+
+      // Add DEA registration for Dr. Amanda Nicole Davis
+      await storage.createDeaRegistration({
+        physicianId: amandaDavis.id,
+        deaNumber: 'AD9876543',
+        issueDate: format(subYears(today, 2), 'yyyy-MM-dd'),
+        expireDate: format(addYears(today, 1), 'yyyy-MM-dd'),
+        state: 'TX',
+        status: 'active',
+        schedules: ['II', 'III', 'IV', 'V'],
+        mateTrainingComplete: true,
+        mateTrainingDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+        businessActivityCode: 'A',
+        additionalRegistrations: ['Hospital privileges', 'Emergency prescribing']
+      });
+
+      console.log(`✅ Created DEA registration for ${amandaDavis.fullLegalName}`);
+
+      // Add CSR license for Dr. Amanda Nicole Davis
+      await storage.createCsrLicense({
+        physicianId: amandaDavis.id,
+        state: 'TX',
+        licenseNumber: 'CSR-TX-987654',
+        issueDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+        expireDate: format(addYears(today, 1), 'yyyy-MM-dd'),
+        status: 'active',
+        renewalCycle: 'biennial',
+        registrationFee: 250,
+        lastRenewalDate: format(subMonths(today, 12), 'yyyy-MM-dd'),
+        notes: 'Controlled substance registration for Texas'
+      });
+
+      console.log(`✅ Created CSR license for ${amandaDavis.fullLegalName}`);
+
+      // Add board certifications for Dr. Amanda Nicole Davis
+      await storage.createPhysicianCertification({
+        physicianId: amandaDavis.id,
+        certificationType: 'Board Certification',
+        certifyingBody: 'American Board of Family Medicine',
+        certificationNumber: 'ABFM-987654',
+        issueDate: format(subYears(today, 10), 'yyyy-MM-dd'),
+        expirationDate: format(addYears(today, 2), 'yyyy-MM-dd'),
+        status: 'active',
+        notes: 'Family Medicine Board Certification'
+      });
+
+      await storage.createPhysicianCertification({
+        physicianId: amandaDavis.id,
+        certificationType: 'Sports Medicine Certificate',
+        certifyingBody: 'American Board of Sports Medicine',
+        certificationNumber: 'ABSM-456789',
+        issueDate: format(subYears(today, 8), 'yyyy-MM-dd'),
+        expirationDate: format(addYears(today, 1), 'yyyy-MM-dd'),
+        status: 'active',
+        notes: 'Sports Medicine Subspecialty Certification'
+      });
+
+      await storage.createPhysicianCertification({
+        physicianId: amandaDavis.id,
+        certificationType: 'ACLS',
+        certifyingBody: 'American Heart Association',
+        certificationNumber: 'AHA-ACLS-789123',
+        issueDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+        expirationDate: format(addYears(today, 1), 'yyyy-MM-dd'),
+        status: 'active',
+        notes: 'Advanced Cardiac Life Support'
+      });
+
+      await storage.createPhysicianCertification({
+        physicianId: amandaDavis.id,
+        certificationType: 'BLS',
+        certifyingBody: 'American Heart Association',
+        certificationNumber: 'AHA-BLS-321654',
+        issueDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+        expirationDate: format(addYears(today, 1), 'yyyy-MM-dd'),
+        status: 'active',
+        notes: 'Basic Life Support'
+      });
+
+      console.log(`✅ Created certifications for ${amandaDavis.fullLegalName}`);
+    }
+
     console.log('\n✅ Test data seeded successfully!');
     console.log(`📊 Summary:`);
     console.log(`  - ${createdPhysicians.length} physicians created`);
