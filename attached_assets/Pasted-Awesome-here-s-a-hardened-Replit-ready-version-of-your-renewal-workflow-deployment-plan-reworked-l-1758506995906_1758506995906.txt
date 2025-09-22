@@ -1,0 +1,318 @@
+Awesome—here’s a hardened, Replit-ready version of your renewal workflow deployment plan, reworked like a senior architect would ship it. I removed timelines, added redundancy so you don’t miss legacy/“old” dates, and made it concrete enough to implement straight on Replit.
+
+# Production Deployment Plan (Replit-ready, no timelines)
+
+## 0) Architecture at a Glance
+
+* **Frontend**: React + TypeScript + shadcn/ui + Tailwind, static build served from Node.
+* **Backend**: Node 20 (Fastify or NestJS), **PostgreSQL** (managed), **Redis** (managed) for locks/caching, **BullMQ** for queues (or a pure-Postgres job queue if avoiding Redis).
+* **Schedulers & Workers**: In-process workers + separate worker process using **Replit Deployments**. Leader election via Redis or Postgres advisory locks.
+* **Notifications**: Primary = Microsoft Graph (Outlook). Fallback = SendGrid/Mailgun. Optional SMS = Twilio. Optional Slack/MS Teams webhooks for ops.
+* **Observability**: OpenTelemetry traces/metrics + Sentry for errors + health checks + synthetic canary jobs.
+* **Security**: Env-based secret management, least-privileged DB roles, PHI-aware logs (no sensitive values).
+
+---
+
+## 1) Email & Multi-Channel Notifications (No more console logs)
+
+**Goal:** 100% delivery with graceful degradation.
+
+* Implement a **Notification Orchestrator** with pluggable providers:
+
+  * `EmailProviderPrimary: Microsoft Graph`
+  * `EmailProviderFallback: SendGrid/Mailgun`
+  * `SMSProvider: Twilio` (optional, for failed email or “last-mile” reminders)
+  * `OpsProvider: Slack/Teams webhook` (for escalations)
+* **Idempotency**: Generate `idempotency_key = sha256(user_id|license_id|template|scheduled_at)`. Store send attempts in `notification_outbox`.
+* **Smart Retry**:
+
+  * 3 immediate retries with exponential backoff (e.g., 1m, 5m, 30m).
+  * If all fail, mark `DEFERRED` and notify Ops (Slack/Teams).
+* **Deliverability**:
+
+  * Use a verified domain, DKIM/SPF/DMARC set.
+  * Build text-only fallback in every template.
+* **Content**:
+
+  * Templates in MJML/Handlebars with strict variable schema.
+  * No PHI beyond what’s required (license type + masked number + state + exp date). Link to secure portal for details.
+
+---
+
+## 2) Monitoring, Logging, Health
+
+* **Tracing & Metrics**: OpenTelemetry SDK; export to a managed collector (or Sentry Performance if you want one tool).
+* **Error Tracking**: Sentry SDK in backend + workers (release tag from git SHA).
+* **Request/Response Logging**: Pino logger with **redaction** rules (emails, tokens, PHI).
+* **Health Endpoints**:
+
+  * `/health/live` (process up),
+  * `/health/ready` (DB + Redis reachable; leader acquired if scheduler).
+* **Synthetic Canaries**:
+
+  * A canary job creates a fake “license due in 3 days” record hourly in a sandbox tenant, ensures notification flow completes, and auto-cleans.
+
+---
+
+## 3) Database Hardening & Query Speed
+
+* **Schema (core tables)**:
+
+  * `clinicians(id, full_name, email, role, …)`
+  * `licenses(id, clinician_id, type, number, state, issuing_board, issue_date, expiration_date, status, …)`
+  * `renewal_policies(id, license_type, state, lead_days_primary, lead_days_secondary, buffer_days_after_expiry, grace_days, …)`
+  * `notification_schedule(id, license_id, event (PRIMARY/SECONDARY/PAST_DUE), scheduled_at, window_start, window_end, status(PENDING|SENT|FAILED|DEFERRED), idempotency_key, attempt_count, provider_used, last_error, …)`
+  * `jobs(id, type, payload_json, run_at, status, attempt_count, locked_at, locked_by, dedupe_key, …)`  ← outbox/queue (if Postgres-only)
+  * `audit_log(id, actor, action, entity_type, entity_id, ts, metadata_json)`
+* **Indexes**:
+
+  * `licenses(expiration_date)`, `licenses(state)`, `licenses(clinician_id)`
+  * `notification_schedule(status, scheduled_at)`, `notification_schedule(idempotency_key UNIQUE)`
+  * Partial index: `notification_schedule(status) WHERE status='PENDING'`
+* **Partitioning**:
+
+  * Partition `notification_schedule` by month on `scheduled_at` if volume is high.
+* **Connection Pooling**:
+
+  * Use pgbouncer-compatible pooler; configure Node pool limits sensibly (e.g., 10–20).
+* **Backups & PITR**:
+
+  * Point-in-time recovery enabled. Nightly verified restore test (see §10).
+
+---
+
+## 4) The Scheduler (Never miss a date—even old ones)
+
+**Problems solved**: daylight savings, clock skew, cold starts, missed runs, migrated/late data.
+
+* **Time Discipline**:
+
+  * Store everything in **UTC**, display with user timezone only at the edge.
+  * Compute windows with a **time window strategy**, not exact timestamps:
+
+    * e.g., “send primary lead at **N days before expiration between 08:00–12:00 local**.”
+* **Three Redundancy Layers**:
+
+  1. **Continuous Scan Worker** (every minute):
+     `SELECT … FROM notification_schedule WHERE status='PENDING' AND window_start <= now_utc AND now_utc <= window_end FOR UPDATE SKIP LOCKED LIMIT N;`
+  2. **Catch-up Scan** on startup & hourly:
+     Looks back **X days** (configurable, e.g., 14) for any **missed** `PENDING` rows where `window_end < now_utc` → mark `LATE_PENDING` → send with **“late window” policy** (see next bullet).
+  3. **Late Window Policy**:
+     If a schedule was missed (deploy incident, provider outage), convert to **immediate send** with a “we’re re-confirming your upcoming renewal” template. All such sends are **rate-limited per clinician** (e.g., max 1 per 4h) to avoid spam.
+* **Leader Election**:
+
+  * Use Redis Redlock or Postgres advisory locks for a single active **scheduler leader**; workers can scale horizontally.
+* **Idempotent Dispatch**:
+
+  * Acquire job row with `FOR UPDATE SKIP LOCKED`.
+  * Mark `SENDING` → try → set `SENT` with `provider_used` + message id.
+  * If crash mid-send, rely on idempotency key + provider dedupe header.
+
+---
+
+## 5) Automated Testing (CI in Replit Deployments)
+
+* **Unit**: business logic for windowing, lead-days, late windows, DST/Feb-29.
+* **Property-based tests**: random dates/timezones to catch time math bugs.
+* **Integration**: DB + job queue + a fake provider (wire-mock) to validate retries and idempotency.
+* **Contract tests**: Notification templates with strict schema validation.
+* **E2E Smoke**: Synthetic canary path from “create license” to “email sent”.
+
+---
+
+## 6) Load & Concurrency
+
+* **Load testing fixtures**: seed 50k licenses across mixed states/timezones with clustered expirations (end-of-month spikes).
+* **Concurrency**:
+
+  * Worker concurrency tuned (e.g., 20–50 per pod). Backpressure = queue length + DB CPU.
+* **Hot paths**:
+
+  * Read models (materialized view) for dashboards:
+    `license_renewal_view (license_id, clinician_id, days_to_expiry, next_notification_at, status, risk_score)`
+* **Caching**:
+
+  * Redis cache for read models (60–300s TTL).
+  * Cache renewal policies by (state, license\_type) with version key.
+
+---
+
+## 7) Security Review (HIPAA-sensitive mindset)
+
+* **AuthN/Z**: JWT with short TTL + refresh; RBAC per role (Admin, Clinic, Physician).
+* **Input Validation**: Zod/TypeBox schemas on every API.
+* **SSRF & Uploads**: Direct-to-storage signed URLs; scan uploads (ClamAV service) if you accept documents here.
+* **Audit**: Every state transition in `audit_log`. Immutable append-only.
+* **Secrets**: Replit Secrets for tokens; rotate keys quarterly; mTLS to DB if supported.
+* **PII/PHI Minimization** in notifications; logs redact by default.
+
+---
+
+## 8) Performance (API & Frontend)
+
+* **API**: Fastify with compression; avoid N+1 via typed query builders; keep responses <150ms P50.
+* **Frontend**:
+
+  * Vite build; code-split routes; prefetch critical data; lazy-load charts.
+  * Optimistic updates + suspense boundaries.
+* **CDN**: Serve static assets via Replit edge if available, else cache-control headers.
+
+---
+
+## 9) Docs that Actually Help Ops
+
+* **API Reference**: Typed endpoints with examples + curl.
+* **Runbooks**:
+
+  * “How to restore from backup”
+  * “How to purge a stuck queue”
+  * “How to rotate provider credentials”
+  * “What to do if emails stop sending”
+* **Troubleshooting map**: Symptom → checks → fixes (copy/paste commands).
+* **Onboarding**: “Add a new license type/state policy” step-by-step.
+
+---
+
+## 10) Backup, Recovery, and DR Drills
+
+* **Automated nightly backups + PITR**.
+* **Verified Restore**:
+
+  * Spin up a temp DB weekly.
+  * Run a scripted verification: row counts, sample license timelines, checksum of critical tables, sample notification replay dry-run.
+* **Config Version Control**:
+
+  * Renewal policies versioned in Git + DB `policy_version` table.
+  * Blue/green rollout of policy changes with feature flags and shadow validation (compute next notifications both old/new, compare, then flip).
+
+---
+
+## 11) Deployment & Rollout
+
+* **Environments**: `staging`, `production`.
+* **Release flow**:
+
+  * Build → Test → Deploy staging → E2E smoke + synthetic canary passes → Promote to prod.
+* **Gradual Rollout**:
+
+  * **Feature flags** on notification types (primary/secondary/past-due) and cohorts (tenant %, state %, user %).
+  * Start with Ops-only notifications to validate templates, then enable email/SMS to small cohort, then 100%.
+* **Post-Deploy Guardrails**:
+
+  * Dashboards for send rates, failure rates, queue latency, slow queries.
+  * Auto-rollback trigger if error rate > threshold or delivery drops.
+
+---
+
+## 12) Key Metrics (live dashboards)
+
+* **Reliability**: Scheduler leader uptime; queue latency; missed-window count (goal: 0).
+* **Delivery**: Send success % by provider; retry counts; time-to-deliver p50/p95.
+* **Performance**: API p50/p95; DB CPU/IO; slow query list.
+* **Accuracy**: % of licenses with correct next\_notification\_at (shadow calc drift = 0).
+* **UX**: Task completion clicks; reminder → action conversion rate.
+
+---
+
+## 13) Risk Mitigation (Concrete Controls)
+
+* **Email Delivery**: Two providers + idempotency + automatic channel fallback → SMS → Ops escalation.
+* **DB Performance**: Proper indexes + partial indexes + materialized views; emergency read-replica flag (if your managed DB supports it).
+* **Scheduler Reliability**: Leader election + catch-up scans + late window policy + synthetic canary.
+* **Data Integrity**: Strict constraints, foreign keys, `ON UPDATE`/`ON DELETE` rules; audit log; migration pre-checks and post-checks.
+* **Time Anomalies**: DST test suite, Feb-29 rules, month-end spikes; **cronless “windowing”** approach avoids single-second misses.
+
+---
+
+## 14) Implementation Snippets (ready to drop in)
+
+### 14.1 Postgres job claim (no Redis)
+
+```sql
+-- pick jobs due now without stampeding
+UPDATE notification_schedule
+SET status = 'SENDING'
+WHERE id IN (
+  SELECT id FROM notification_schedule
+  WHERE status='PENDING'
+    AND window_start <= now() AT TIME ZONE 'utc'
+    AND now() AT TIME ZONE 'utc' <= window_end
+  ORDER BY scheduled_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 200
+)
+RETURNING id, license_id, event, scheduled_at, idempotency_key;
+```
+
+### 14.2 Idempotent send (Node, pseudo)
+
+```ts
+const already = await db.oneOrNone(
+  'SELECT id FROM notification_schedule WHERE idempotency_key=$1 AND status=$2',
+  [key, 'SENT']
+);
+if (already) return; // done
+
+try {
+  const msgId = await providers.primary.send(template, to, vars);
+  await db.none('UPDATE notification_schedule SET status=$1, provider_used=$2 WHERE id=$3',
+    ['SENT', 'PRIMARY', schedId]);
+} catch (e) {
+  await retryOrFallback(e, schedId);
+}
+```
+
+### 14.3 Catch-up scan
+
+```ts
+const lookbackHours = parseInt(process.env.SCHEDULER_LOOKBACK_HOURS ?? '336'); // 14 days
+await db.tx(async t => {
+  const missed = await t.manyOrNone(`
+    SELECT id FROM notification_schedule
+    WHERE status='PENDING' AND window_end < (now() AT TIME ZONE 'utc')
+  `);
+  for (const m of missed) {
+    await t.none(
+      `UPDATE notification_schedule SET status='PENDING', 
+       window_start = now() AT TIME ZONE 'utc', 
+       window_end = (now() AT TIME ZONE 'utc') + interval '2 hour'
+       WHERE id=$1`, [m.id]);
+  }
+});
+```
+
+---
+
+## 15) “Old Dates” Contingency (explicit)
+
+* **On ingestion/migration** of historical licenses, run a **backfill job**:
+
+  1. Normalize expiration dates (UTC) and compute **all** expected notifications per policy.
+  2. For any notification window already in the past → generate a **late window** record to notify now (with “you may have missed this reminder” language).
+  3. Rate-limit per clinician and per tenant.
+* **Nightly Reconciliation**:
+
+  * Recompute `next_notification_at` for all active licenses from canonical rules into a **shadow table**; compare with `notification_schedule`. If drift > 0, log and auto-heal (upsert missing schedules, close obsolete ones).
+* **Human-in-the-loop**:
+
+  * Ops dashboard tile: “Potentially missed reminders (last 14 days)” with one-click bulk resend (idempotent).
+
+---
+
+## 16) Replit-Specific Notes
+
+* Use **Replit Deployments** with two processes: `web` and `worker`. Health checks for both.
+* Keep secrets in Replit Secrets; never in repo.
+* Add a small **keep-alive** synthetic hit (if needed) but rely on Deployments for always-on.
+* Use a managed DB/Redis outside Replit for durability.
+
+---
+
+If you want, I can spin this into:
+
+* a `/db.sql` with DDL for the tables and indexes,
+* a `/src/worker/scheduler.ts` scaffold (leader election + claim loop),
+* a `/src/notifications/` provider interface + Graph + SendGrid adapters,
+* and a `/docs/runbooks.md` starter.
+
+Say the word, and I’ll drop those files ready for Replit.
