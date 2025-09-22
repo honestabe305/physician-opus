@@ -73,6 +73,27 @@ export class NotificationScheduler {
         console.log('✅ Old notifications cleanup completed');
       }
     });
+
+    // Auto-create renewal workflows for expiring licenses (runs every 6 hours)
+    this.registerJob({
+      name: 'autoCreateRenewalWorkflows',
+      interval: 6 * 60 * 60 * 1000, // 6 hours
+      isRunning: false,
+      handler: async () => {
+        console.log('🔄 Creating automatic renewal workflows for expiring licenses...');
+        try {
+          const { renewalService } = await import('./renewal-service');
+          const results = await renewalService.createAutomaticRenewalWorkflows(90);
+          console.log(`✅ Automatic renewal workflow creation completed: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+          
+          if (results.errors.length > 0) {
+            console.warn('⚠️ Errors during automatic workflow creation:', results.errors);
+          }
+        } catch (error) {
+          console.error('❌ Failed to run automatic renewal workflow creation:', error);
+        }
+      }
+    });
   }
 
   private registerJob(job: ScheduledJob): void {
