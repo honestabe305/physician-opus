@@ -201,18 +201,23 @@ export function PracticeDocumentsSection({ practices, searchTerm, onRefresh }: P
     deleteDocumentMutation.mutate(documentId);
   };
 
-  const handleDownload = async (document: any) => {
+  const handleDownload = async (doc: any) => {
     try {
-      const response = await apiRequest(`/practice-documents/${document.id}/download`, {
+      const response = await apiRequest(`/practice-documents/${doc.id}/download`, {
         method: 'GET',
         responseType: 'blob',
       });
       
-      const url = window.URL.createObjectURL(new Blob([response]));
-      const link = document.createElement('a');
+      // Handle blob response properly
+      const blob = response instanceof Blob ? response : new Blob([response], { 
+        type: doc.contentType || 'application/octet-stream' 
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
       link.href = url;
-      link.setAttribute('download', document.fileName || 'document');
-      document.body.appendChild(link);
+      link.setAttribute('download', doc.fileName || 'document');
+      window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
