@@ -62,7 +62,7 @@ export default function Dashboard() {
     queryFn: () => apiRequest('/analytics/certifications/expiration-report?days=30'),
   });
 
-  // Calculate stats from real data
+  // Calculate stats from real data with navigation links
   const stats = [
     {
       title: "Total Physicians",
@@ -72,6 +72,7 @@ export default function Dashboard() {
       icon: Users,
       description: "Active physician profiles",
       isLoading: isLoadingStatus,
+      href: "/physicians",
     },
     {
       title: "Active Profiles",
@@ -81,6 +82,7 @@ export default function Dashboard() {
       icon: UserCheck,
       description: "Active physician profiles",
       isLoading: isLoadingStatus,
+      href: "/physicians?status=active",
     },
     {
       title: "Pending Reviews",
@@ -93,6 +95,7 @@ export default function Dashboard() {
       icon: Clock,
       description: "Awaiting verification",
       isLoading: isLoadingStatus,
+      href: "/physicians?status=pending",
     },
     {
       title: "Expiring Soon",
@@ -105,6 +108,7 @@ export default function Dashboard() {
       icon: AlertTriangle,
       description: "Licenses & certifications",
       isLoading: isLoadingLicenses || isLoadingCertifications,
+      href: "/renewal-workflows",
     }
   ];
 
@@ -229,28 +233,30 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Now clickable */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
-          <Card key={stat.title} className="border-border/50 shadow-sm hover:shadow-md transition-shadow" data-testid={`card-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground" data-testid={`value-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                {stat.isLoading ? <Skeleton className="h-8 w-16" /> : stat.value}
-              </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <TrendingUp className="h-3 w-3 text-success" />
-                <span className="text-success">{stat.change}</span>
-                <span>from last month</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
-            </CardContent>
-          </Card>
+          <Link key={stat.title} href={stat.href}>
+            <Card className="border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-105" data-testid={`card-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.title}
+                </CardTitle>
+                <stat.icon className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-foreground" data-testid={`value-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {stat.isLoading ? <Skeleton className="h-8 w-16" /> : stat.value}
+                </div>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <TrendingUp className="h-3 w-3 text-success" />
+                  <span className="text-success">{stat.change}</span>
+                  <span>from last month</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -367,24 +373,44 @@ export default function Dashboard() {
                   </div>
                 ))
               ) : (
-                alerts.map((alert) => (
-                  <div key={alert.id} className="flex gap-3 p-3 rounded-lg bg-muted/30" data-testid={`alert-${alert.id}`}>
-                    <AlertTriangle className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
-                      alert.priority === "high" ? "text-destructive" : 
-                      alert.priority === "medium" ? "text-warning" : "text-muted-foreground"
-                    }`} />
-                    <div className="flex-1">
-                      <p className="text-sm text-foreground">{alert.message}</p>
-                      <Badge 
-                        variant={alert.priority === "high" ? "destructive" : 
-                                alert.priority === "medium" ? "secondary" : "outline"}
-                        className="text-xs mt-1"
-                      >
-                        {alert.priority}
-                      </Badge>
+                alerts.map((alert) => {
+                  // Determine the link based on alert type
+                  const getAlertLink = (alertId: string) => {
+                    if (alertId.includes('licenses')) return '/licensure';
+                    if (alertId.includes('certifications')) return '/education';
+                    if (alertId.includes('pending-profiles')) return '/physicians?status=pending';
+                    return '#';
+                  };
+                  
+                  const alertLink = getAlertLink(alert.id);
+                  
+                  const AlertContent = (
+                    <div className="flex gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors" data-testid={`alert-${alert.id}`}>
+                      <AlertTriangle className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
+                        alert.priority === "high" ? "text-destructive" : 
+                        alert.priority === "medium" ? "text-warning" : "text-muted-foreground"
+                      }`} />
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground">{alert.message}</p>
+                        <Badge 
+                          variant={alert.priority === "high" ? "destructive" : 
+                                  alert.priority === "medium" ? "secondary" : "outline"}
+                          className="text-xs mt-1"
+                        >
+                          {alert.priority}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                  
+                  return alertLink !== '#' ? (
+                    <Link key={alert.id} href={alertLink} className="block cursor-pointer">
+                      {AlertContent}
+                    </Link>
+                  ) : (
+                    <div key={alert.id}>{AlertContent}</div>
+                  );
+                })
               )}
             </div>
           </CardContent>

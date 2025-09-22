@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -137,25 +139,56 @@ interface NotificationsDropdownProps {
 }
 
 export function NotificationsDropdown({ hasEnabledNotifications, getEnabledCount }: NotificationsDropdownProps) {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [isOpen, setIsOpen] = useState(false);
+
+  // Fetch real notifications from backend
+  const { data: backendNotifications = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/notifications/upcoming', { days: 30 }],
+    queryFn: () => apiRequest('/api/notifications/upcoming?days=30'),
+    refetchInterval: 60000,
+  });
+
+  // Convert backend notifications to frontend format
+  const notifications: Notification[] = backendNotifications.map(notification => ({
+    id: notification.id,
+    type: notification.type === 'license' ? 'license_expiring' : 
+          notification.type === 'document' ? 'document_required' :
+          notification.type === 'profile' ? 'profile_incomplete' :
+          notification.type === 'approval' ? 'approval_needed' : 'system_alert',
+    title: notification.type === 'license' ? 'License Expiring Soon' :
+           notification.type === 'document' ? 'Document Upload Required' :
+           notification.type === 'profile' ? 'Profile Incomplete' :
+           notification.type === 'approval' ? 'Approval Required' : 'System Alert',
+    message: notification.message || `${notification.providerName || 'Physician'} - ${notification.licenseType || 'Issue'} requires attention`,
+    timestamp: new Date(notification.notificationDate || notification.createdAt || Date.now()),
+    read: notification.sentStatus === 'read',
+    priority: notification.severity === 'critical' ? 'urgent' :
+              notification.severity === 'warning' ? 'high' :
+              notification.severity === 'info' ? 'medium' : 'low'
+  }));
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      await apiRequest(`/api/notifications/${id}/mark-read`, {
+        method: 'PUT',
+      });
+      // The query will be refetched automatically
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      await apiRequest('/api/notifications/mark-all-read', {
+        method: 'PUT',
+      });
+      // The query will be refetched automatically
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
   };
 
   return (
@@ -204,42 +237,78 @@ export function NotificationsDropdown({ hasEnabledNotifications, getEnabledCount
         ) : (
           <ScrollArea className="h-80">
             <div className="space-y-1">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`p-3 hover:bg-muted/50 cursor-pointer border-l-2 ${
-                    notification.read 
-                      ? 'border-l-transparent' 
-                      : `border-l-2 ${getPriorityColor(notification.priority)}`
-                  } ${notification.read ? 'opacity-60' : ''}`}
-                  onClick={() => markAsRead(notification.id)}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-0.5">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium leading-none">
-                          {notification.title}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTimeAgo(notification.timestamp)}
-                        </span>
+              {notifications.map((notification) => {
+                // Determine the link based on notification type
+                const getNotificationLink = (type: Notification['type']) => {
+                  switch (type) {
+                    case 'license_expiring':
+                      return '/licensure';
+                    case 'document_required':
+                      return '/documents';
+                    case 'profile_incomplete':
+                      return '/physicians';
+                    case 'approval_needed':
+                      return '/physicians?status=pending';
+                    case 'system_alert':
+                      return '/settings';
+                    default:
+                      return '#';
+                  }
+                };
+                
+                const notificationLink = getNotificationLink(notification.type);
+                
+                const handleClick = () => {
+                  markAsRead(notification.id);
+                  setIsOpen(false);
+                };
+                
+                const NotificationContent = (
+                  <div
+                    className={`p-3 hover:bg-muted/50 cursor-pointer border-l-2 ${
+                      notification.read 
+                        ? 'border-l-transparent' 
+                        : `border-l-2 ${getPriorityColor(notification.priority)}`
+                    } ${notification.read ? 'opacity-60' : ''}`}
+                    onClick={handleClick}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        {getNotificationIcon(notification.type)}
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {notification.message}
-                      </p>
-                      {!notification.read && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-primary rounded-full"></div>
-                          <span className="text-xs text-primary font-medium">New</span>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium leading-none">
+                            {notification.title}
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            {formatTimeAgo(notification.timestamp)}
+                          </span>
                         </div>
-                      )}
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {notification.message}
+                        </p>
+                        {!notification.read && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-primary rounded-full"></div>
+                            <span className="text-xs text-primary font-medium">New</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+                
+                return notificationLink !== '#' ? (
+                  <Link key={notification.id} href={notificationLink}>
+                    {NotificationContent}
+                  </Link>
+                ) : (
+                  <div key={notification.id}>
+                    {NotificationContent}
+                  </div>
+                );
+              })}
             </div>
           </ScrollArea>
         )}

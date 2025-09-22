@@ -22,6 +22,7 @@ import {
   AlertCircle,
   FileText,
 } from "lucide-react";
+import { Link } from "wouter";
 import type { SelectPhysician } from "../../shared/schema";
 
 export default function SearchPage() {
@@ -239,11 +240,11 @@ export default function SearchPage() {
           ) : (
             <div className="space-y-4">
               {physicians.map((physician: SelectPhysician) => (
-                <div
-                  key={physician.id}
-                  className="p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
-                  data-testid={`result-physician-${physician.id}`}
-                >
+                <Link key={physician.id} href={`/physicians/${physician.id}`}>
+                  <div
+                    className="p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
+                    data-testid={`result-physician-${physician.id}`}
+                  >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -260,9 +261,9 @@ export default function SearchPage() {
                         </div>
                         
                         <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                          {physician.practiceName && (
-                            <p data-testid={`practice-${physician.id}`}>
-                              Practice: {physician.practiceName}
+                          {physician.clinicianType && (
+                            <p data-testid={`specialty-${physician.id}`}>
+                              Type: {physician.clinicianType}
                             </p>
                           )}
                           {physician.npi && (
@@ -291,7 +292,8 @@ export default function SearchPage() {
                       {physician.status || 'inactive'}
                     </Badge>
                   </div>
-                </div>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
