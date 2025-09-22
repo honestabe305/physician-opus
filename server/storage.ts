@@ -349,6 +349,9 @@ export interface IStorage {
   createProfessionalReference(reference: InsertProfessionalReference): Promise<SelectProfessionalReference>;
   getProfessionalReference(id: string): Promise<SelectProfessionalReference | null>;
   getProfessionalReferencesByPhysician(physicianId: string): Promise<SelectProfessionalReference[]>;
+  getAllProfessionalReferences(): Promise<SelectProfessionalReference[]>;
+  getAllProfessionalReferencesPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectProfessionalReference[]>;
+  getAllProfessionalReferencesCount(filters?: SearchFilter[]): Promise<number>;
   updateProfessionalReference(id: string, updates: Partial<InsertProfessionalReference>): Promise<SelectProfessionalReference>;
   deleteProfessionalReference(id: string): Promise<void>;
 
@@ -3541,6 +3544,53 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting professional reference:', error);
       throw new Error(`Failed to delete professional reference: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProfessionalReferences(): Promise<SelectProfessionalReference[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(professionalReferences);
+    } catch (error) {
+      console.error('Error getting all professional references:', error);
+      throw new Error(`Failed to get professional references: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProfessionalReferencesPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectProfessionalReference[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(professionalReferences);
+      
+      if (filters && filters.length > 0) {
+        const conditions = filters.map(filter => this.buildFilterCondition(filter, professionalReferences));
+        query = query.where(and(...conditions));
+      }
+      
+      return await query
+        .limit(pagination.limit)
+        .offset(pagination.offset);
+    } catch (error) {
+      console.error('Error getting paginated professional references:', error);
+      throw new Error(`Failed to get professional references: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProfessionalReferencesCount(filters?: SearchFilter[]): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(professionalReferences);
+      
+      if (filters && filters.length > 0) {
+        const conditions = filters.map(filter => this.buildFilterCondition(filter, professionalReferences));
+        query = query.where(and(...conditions));
+      }
+      
+      const [result] = await query;
+      return result.count;
+    } catch (error) {
+      console.error('Error getting professional references count:', error);
+      throw new Error(`Failed to get professional references count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

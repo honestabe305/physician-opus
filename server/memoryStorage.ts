@@ -1289,6 +1289,48 @@ export class MemoryStorage implements IStorage {
     this.professionalReferences = this.professionalReferences.filter(r => r.id !== id);
   }
 
+  async getAllProfessionalReferences(): Promise<SelectProfessionalReference[]> {
+    return [...this.professionalReferences];
+  }
+
+  async getAllProfessionalReferencesPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectProfessionalReference[]> {
+    let result = [...this.professionalReferences];
+    
+    // Simple filtering implementation for memory storage
+    if (filters && filters.length > 0) {
+      result = result.filter(ref => {
+        return filters.every(filter => {
+          const value = (ref as any)[filter.field];
+          if (value === null || value === undefined) return false;
+          const stringValue = String(value).toLowerCase();
+          const filterValue = String(filter.value).toLowerCase();
+          return stringValue.includes(filterValue);
+        });
+      });
+    }
+    
+    return result.slice(pagination.offset, pagination.offset + pagination.limit);
+  }
+
+  async getAllProfessionalReferencesCount(filters?: SearchFilter[]): Promise<number> {
+    if (!filters || filters.length === 0) {
+      return this.professionalReferences.length;
+    }
+    
+    // Apply same filtering logic as paginated method
+    const filtered = this.professionalReferences.filter(ref => {
+      return filters.every(filter => {
+        const value = (ref as any)[filter.field];
+        if (value === null || value === undefined) return false;
+        const stringValue = String(value).toLowerCase();
+        const filterValue = String(filter.value).toLowerCase();
+        return stringValue.includes(filterValue);
+      });
+    });
+    
+    return filtered.length;
+  }
+
   // Payer Enrollment operations
   async createPayerEnrollment(enrollment: InsertPayerEnrollment): Promise<SelectPayerEnrollment> {
     const newEnrollment: SelectPayerEnrollment = {

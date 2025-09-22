@@ -34,6 +34,14 @@ const VALID_PATHS = [
   "/renewal-workflows",
   "/analytics",
   "/settings",
+  "/help",
+  // Payer Enrollment Routes
+  "/payer-enrollment",
+  "/payer-enrollment/payers",
+  "/payer-enrollment/enrollments",
+  "/payer-enrollment/practice-locations",
+  "/payer-enrollment/banking",
+  "/payer-enrollment/references",
 ];
 
 // Valid dynamic route patterns

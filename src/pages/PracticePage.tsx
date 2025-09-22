@@ -210,9 +210,11 @@ export default function PracticePage() {
   const physicians = physiciansData?.physicians || [];
 
   // Fetch practices data
-  const { data: practices = [], isLoading: practicesLoading } = useQuery<SelectPractice[]>({
+  const { data: practicesResponse, isLoading: practicesLoading } = useQuery({
     queryKey: ['/practices'],
   });
+  
+  const practices = practicesResponse?.data || [];
 
   // Practice creation form
   const form = useForm<PracticeFormData>({
