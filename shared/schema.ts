@@ -14,6 +14,12 @@ export const documentTypeEnum = pgEnum('document_type', [
   'malpractice_insurance', 'npdb_report', 'cv', 'immunization_records', 'citizenship_proof'
 ]);
 
+// Practice-level document types for group banking documents
+export const practiceDocumentTypeEnum = pgEnum('practice_document_type', [
+  'irs_cp575_letter', 'irs_147c_letter', 'w9_form', 'bank_letter', 'void_check',
+  'tax_id_confirmation', 'operational_agreement', 'business_license'
+]);
+
 // New enums for telemed licensing platform
 export const licenseStatusEnum = pgEnum('license_status', ['active', 'expired', 'pending_renewal']);
 export const renewalCycleEnum = pgEnum('renewal_cycle', ['annual', 'biennial']);
@@ -519,36 +525,33 @@ export const practiceLocations = pgTable('practice_locations', {
   stateActiveIdx: index('idx_practice_locations_state_active').on(table.state, table.isActive)
 }));
 
-// Banking/EFT information for providers
-export const providerBanking = pgTable('provider_banking', {
+// Practice Documents table for group-level banking documents (IRS letters, W-9, bank letters)
+export const practiceDocuments = pgTable('practice_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
-  physicianId: uuid('physician_id').notNull().references(() => physicians.id, { onDelete: 'cascade' }),
+  practiceId: uuid('practice_id').notNull().references(() => practices.id, { onDelete: 'cascade' }),
   
-  // Banking details (encrypted sensitive data)
-  bankName: text('bank_name').notNull(),
-  routingNumber: text('routing_number', { length: 9 }).notNull(), // encrypted
-  accountNumber: text('account_number').notNull(), // encrypted
-  accountType: text('account_type').notNull().default('checking'), // checking/savings
+  documentType: practiceDocumentTypeEnum('document_type').notNull(),
+  documentName: text('document_name').notNull(), // User-friendly name
+  fileName: text('file_name').notNull(),
+  filePath: text('file_path').notNull(),
+  fileSize: integer('file_size'),
+  mimeType: text('mime_type'),
   
-  // EFT/ERA preferences
-  eftEnabled: boolean('eft_enabled').notNull().default(false),
-  eraEnabled: boolean('era_enabled').notNull().default(false),
-  
-  // Supporting documents
-  voidCheckUrl: text('void_check_url'),
-  bankLetterUrl: text('bank_letter_url'),
-  
+  // Document metadata
+  uploadedBy: uuid('uploaded_by').references(() => users.id),
+  version: integer('version').notNull().default(1),
   isActive: boolean('is_active').notNull().default(true),
+  expirationDate: date('expiration_date'), // For documents that expire
+  notes: text('notes'),
+  
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => ({
-  // CHECK constraints for data integrity
-  bankNameNotEmpty: check('bank_name_not_empty', sql`length(trim(bank_name)) > 0`),
-  accountTypeValid: check('account_type_valid', sql`account_type IN ('checking', 'savings', 'business_checking', 'business_savings')`),
-  urlFormat: check('void_check_url_format', sql`void_check_url IS NULL OR void_check_url ~ '^https?:\/\/'`),
-  bankLetterUrlFormat: check('bank_letter_url_format', sql`bank_letter_url IS NULL OR bank_letter_url ~ '^https?:\/\/'`),
-  // Note: Business logic should enforce one active banking record per physician
-  // This would require application-level validation due to Drizzle limitations
+  // Performance indexes for common query patterns
+  practiceIdIdx: index('idx_practice_documents_practice_id').on(table.practiceId),
+  documentTypeIdx: index('idx_practice_documents_document_type').on(table.documentType),
+  isActiveIdx: index('idx_practice_documents_is_active').on(table.isActive),
+  practiceTypeActiveIdx: index('idx_practice_documents_practice_type_active').on(table.practiceId, table.documentType, table.isActive)
 }));
 
 // Professional References table
@@ -866,14 +869,14 @@ export const insertPracticeLocationSchema = createInsertSchema(practiceLocations
 export type InsertPracticeLocation = typeof practiceLocations.$inferInsert;
 export type SelectPracticeLocation = typeof practiceLocations.$inferSelect;
 
-// Provider Banking schemas and types
-export const insertProviderBankingSchema = createInsertSchema(providerBanking).omit({
+// Practice Documents schemas and types
+export const insertPracticeDocumentSchema = createInsertSchema(practiceDocuments).omit({
   id: true,
   createdAt: true,
   updatedAt: true
 });
-export type InsertProviderBanking = typeof providerBanking.$inferInsert;
-export type SelectProviderBanking = typeof providerBanking.$inferSelect;
+export type InsertPracticeDocument = typeof practiceDocuments.$inferInsert;
+export type SelectPracticeDocument = typeof practiceDocuments.$inferSelect;
 
 // Professional References schemas and types
 export const insertProfessionalReferenceSchema = createInsertSchema(professionalReferences).omit({
