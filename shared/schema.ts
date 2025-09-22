@@ -721,3 +721,48 @@ export const insertRenewalWorkflowSchema = createInsertSchema(renewalWorkflows).
 });
 export type InsertRenewalWorkflow = typeof renewalWorkflows.$inferInsert;
 export type SelectRenewalWorkflow = typeof renewalWorkflows.$inferSelect;
+
+// Payer schemas and types
+export const insertPayerSchema = createInsertSchema(payers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertPayer = typeof payers.$inferInsert;
+export type SelectPayer = typeof payers.$inferSelect;
+
+// Practice Location schemas and types
+export const insertPracticeLocationSchema = createInsertSchema(practiceLocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertPracticeLocation = typeof practiceLocations.$inferInsert;
+export type SelectPracticeLocation = typeof practiceLocations.$inferSelect;
+
+// Provider Banking schemas and types
+export const insertProviderBankingSchema = createInsertSchema(providerBanking).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertProviderBanking = typeof providerBanking.$inferInsert;
+export type SelectProviderBanking = typeof providerBanking.$inferSelect;
+
+// Professional References schemas and types
+export const insertProfessionalReferenceSchema = createInsertSchema(professionalReferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertProfessionalReference = typeof professionalReferences.$inferInsert;
+export type SelectProfessionalReference = typeof professionalReferences.$inferSelect;
+
+// Payer Enrollment schemas and types
+export const insertPayerEnrollmentSchema = createInsertSchema(payerEnrollments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+export type InsertPayerEnrollment = typeof payerEnrollments.$inferInsert;
+export type SelectPayerEnrollment = typeof payerEnrollments.$inferSelect;
