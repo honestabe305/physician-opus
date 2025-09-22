@@ -1,4 +1,4 @@
-import { eq, like, ilike, and, or, sql, lt } from 'drizzle-orm';
+import { eq, like, ilike, and, or, sql, lt, desc, asc, count } from 'drizzle-orm';
 import { encrypt, decrypt, redactBankingData, validatePrivilegedAccess, decryptBankingData, migrateBankingDataEncryption } from './utils/encryption';
 import {
   users,
@@ -87,6 +87,7 @@ import {
   validateGenericStatus,
 } from '../shared/enum-validation';
 import { MemoryStorage } from './memoryStorage';
+import { type PaginationQuery, type SearchFilter } from './middleware/pagination-middleware';
 
 // Storage factory - chooses between PostgreSQL and in-memory based on environment
 export function createStorage(): IStorage {
@@ -120,6 +121,8 @@ export interface IStorage {
   updateProfile(id: string, updates: Partial<InsertProfile>): Promise<SelectProfile>;
   deleteProfile(id: string): Promise<void>;
   getAllProfiles(): Promise<SelectProfile[]>;
+  getAllProfilesPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectProfile[]>;
+  getAllProfilesCount(filters?: SearchFilter[]): Promise<number>;
 
   // Practice operations
   createPractice(practice: InsertPractice): Promise<SelectPractice>;
@@ -129,8 +132,14 @@ export interface IStorage {
   updatePractice(id: string, updates: Partial<InsertPractice>): Promise<SelectPractice>;
   deletePractice(id: string): Promise<void>;
   getAllPractices(): Promise<SelectPractice[]>;
+  getAllPracticesPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPractice[]>;
+  getAllPracticesCount(filters?: SearchFilter[]): Promise<number>;
   searchPractices(query: string): Promise<SelectPractice[]>;
+  searchPracticesPaginated(query: string, pagination: PaginationQuery): Promise<SelectPractice[]>;
+  searchPracticesCount(query: string): Promise<number>;
   getPhysiciansByPractice(practiceId: string): Promise<SelectPhysician[]>;
+  getPhysiciansByPracticePaginated(practiceId: string, pagination: PaginationQuery): Promise<SelectPhysician[]>;
+  getPhysiciansByPracticeCount(practiceId: string): Promise<number>;
 
   // Physician operations
   createPhysician(physician: InsertPhysician): Promise<SelectPhysician>;
@@ -139,29 +148,45 @@ export interface IStorage {
   updatePhysician(id: string, updates: Partial<InsertPhysician>): Promise<SelectPhysician>;
   deletePhysician(id: string): Promise<void>;
   getAllPhysicians(): Promise<SelectPhysician[]>;
+  getAllPhysiciansPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPhysician[]>;
+  getAllPhysiciansCount(filters?: SearchFilter[]): Promise<number>;
   searchPhysicians(query: string): Promise<SelectPhysician[]>;
+  searchPhysiciansPaginated(query: string, pagination: PaginationQuery): Promise<SelectPhysician[]>;
+  searchPhysiciansCount(query: string): Promise<number>;
   getPhysiciansByStatus(status: GenericStatus): Promise<SelectPhysician[]>;
+  getPhysiciansByStatusPaginated(status: GenericStatus, pagination: PaginationQuery): Promise<SelectPhysician[]>;
+  getPhysiciansByStatusCount(status: GenericStatus): Promise<number>;
 
   // Physician License operations
   createPhysicianLicense(license: InsertPhysicianLicense): Promise<SelectPhysicianLicense>;
   getPhysicianLicense(id: string): Promise<SelectPhysicianLicense | null>;
   getPhysicianLicenses(physicianId: string): Promise<SelectPhysicianLicense[]>;
+  getPhysicianLicensesPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianLicense[]>;
+  getPhysicianLicensesCount(physicianId: string): Promise<number>;
   updatePhysicianLicense(id: string, updates: Partial<InsertPhysicianLicense>): Promise<SelectPhysicianLicense>;
   deletePhysicianLicense(id: string): Promise<void>;
   getExpiringLicenses(days: number): Promise<SelectPhysicianLicense[]>;
+  getExpiringLicensesPaginated(days: number, pagination: PaginationQuery): Promise<SelectPhysicianLicense[]>;
+  getExpiringLicensesCount(days: number): Promise<number>;
 
   // Physician Certification operations
   createPhysicianCertification(certification: InsertPhysicianCertification): Promise<SelectPhysicianCertification>;
   getPhysicianCertification(id: string): Promise<SelectPhysicianCertification | null>;
   getPhysicianCertifications(physicianId: string): Promise<SelectPhysicianCertification[]>;
+  getPhysicianCertificationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianCertification[]>;
+  getPhysicianCertificationsCount(physicianId: string): Promise<number>;
   updatePhysicianCertification(id: string, updates: Partial<InsertPhysicianCertification>): Promise<SelectPhysicianCertification>;
   deletePhysicianCertification(id: string): Promise<void>;
   getExpiringCertifications(days: number): Promise<SelectPhysicianCertification[]>;
+  getExpiringCertificationsPaginated(days: number, pagination: PaginationQuery): Promise<SelectPhysicianCertification[]>;
+  getExpiringCertificationsCount(days: number): Promise<number>;
 
   // Physician Education operations
   createPhysicianEducation(education: InsertPhysicianEducation): Promise<SelectPhysicianEducation>;
   getPhysicianEducation(id: string): Promise<SelectPhysicianEducation | null>;
   getPhysicianEducations(physicianId: string): Promise<SelectPhysicianEducation[]>;
+  getPhysicianEducationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianEducation[]>;
+  getPhysicianEducationsCount(physicianId: string): Promise<number>;
   updatePhysicianEducation(id: string, updates: Partial<InsertPhysicianEducation>): Promise<SelectPhysicianEducation>;
   deletePhysicianEducation(id: string): Promise<void>;
 
@@ -169,6 +194,8 @@ export interface IStorage {
   createPhysicianWorkHistory(workHistory: InsertPhysicianWorkHistory): Promise<SelectPhysicianWorkHistory>;
   getPhysicianWorkHistory(id: string): Promise<SelectPhysicianWorkHistory | null>;
   getPhysicianWorkHistories(physicianId: string): Promise<SelectPhysicianWorkHistory[]>;
+  getPhysicianWorkHistoriesPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianWorkHistory[]>;
+  getPhysicianWorkHistoriesCount(physicianId: string): Promise<number>;
   updatePhysicianWorkHistory(id: string, updates: Partial<InsertPhysicianWorkHistory>): Promise<SelectPhysicianWorkHistory>;
   deletePhysicianWorkHistory(id: string): Promise<void>;
 
@@ -176,6 +203,8 @@ export interface IStorage {
   createPhysicianHospitalAffiliation(affiliation: InsertPhysicianHospitalAffiliation): Promise<SelectPhysicianHospitalAffiliation>;
   getPhysicianHospitalAffiliation(id: string): Promise<SelectPhysicianHospitalAffiliation | null>;
   getPhysicianHospitalAffiliations(physicianId: string): Promise<SelectPhysicianHospitalAffiliation[]>;
+  getPhysicianHospitalAffiliationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianHospitalAffiliation[]>;
+  getPhysicianHospitalAffiliationsCount(physicianId: string): Promise<number>;
   updatePhysicianHospitalAffiliation(id: string, updates: Partial<InsertPhysicianHospitalAffiliation>): Promise<SelectPhysicianHospitalAffiliation>;
   deletePhysicianHospitalAffiliation(id: string): Promise<void>;
 
@@ -331,10 +360,35 @@ export interface IStorage {
   getPayerEnrollmentsByLocation(locationId: string): Promise<SelectPayerEnrollment[]>;
   getPayerEnrollmentsByStatus(status: EnrollmentStatus): Promise<SelectPayerEnrollment[]>;
   getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]>;
+  getAllPayerEnrollments(): Promise<SelectPayerEnrollment[]>;
   updatePayerEnrollment(id: string, updates: Partial<InsertPayerEnrollment>): Promise<SelectPayerEnrollment>;
   updateEnrollmentStatus(id: string, status: EnrollmentStatus): Promise<SelectPayerEnrollment>;
   updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment>;
   deletePayerEnrollment(id: string): Promise<void>;
+
+  // Payer Enrollment operations - Paginated versions
+  getAllPayerEnrollmentsPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPayerEnrollment[]>;
+  getAllPayerEnrollmentsCount(filters?: SearchFilter[]): Promise<number>;
+  getPayerEnrollmentsByPhysicianPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByPhysicianCount(physicianId: string): Promise<number>;
+  getPayerEnrollmentsByPayerPaginated(payerId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByPayerCount(payerId: string): Promise<number>;
+  getPayerEnrollmentsByLocationPaginated(locationId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByLocationCount(locationId: string): Promise<number>;
+  getPayerEnrollmentsByStatusPaginated(status: EnrollmentStatus, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByStatusCount(status: EnrollmentStatus): Promise<number>;
+  getExpiringEnrollmentsPaginated(days: number, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]>;
+  getExpiringEnrollmentsCount(days: number): Promise<number>;
+
+  // Payer operations - Paginated versions  
+  getAllPayersPaginated(pagination: PaginationQuery, filters?: SearchFilter[]): Promise<SelectPayer[]>;
+  getAllPayersCount(filters?: SearchFilter[]): Promise<number>;
+  searchPayersPaginated(query: string, pagination: PaginationQuery): Promise<SelectPayer[]>;
+  searchPayersCount(query: string): Promise<number>;
+  getPayersByLineOfBusinessPaginated(lineOfBusiness: string, pagination: PaginationQuery): Promise<SelectPayer[]>;
+  getPayersByLineOfBusinessCount(lineOfBusiness: string): Promise<number>;
+  getPayersByStatusPaginated(isActive: boolean, pagination: PaginationQuery): Promise<SelectPayer[]>;
+  getPayersByStatusCount(isActive: boolean): Promise<number>;
 
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
@@ -440,6 +494,86 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error getting all profiles:', error);
       throw new Error(`Failed to get profiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProfilesPaginated(pagination: PaginationQuery, filters: SearchFilter[] = []): Promise<SelectProfile[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(profiles);
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (profiles as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+      }
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (profiles as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(profiles.createdAt), desc(profiles.id));
+        } else {
+          query = query.orderBy(desc(profiles.createdAt), desc(profiles.id));
+        }
+      } else {
+        query = query.orderBy(desc(profiles.createdAt), desc(profiles.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated profiles:', error);
+      throw new Error(`Failed to get paginated profiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllProfilesCount(filters: SearchFilter[] = []): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(profiles);
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (profiles as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+      }
+      
+      const result = await query;
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting profiles count:', error);
+      throw new Error(`Failed to get profiles count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -562,6 +696,182 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  async getAllPracticesPaginated(pagination: PaginationQuery, filters: SearchFilter[] = []): Promise<SelectPractice[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(practices).where(eq(practices.isActive, true));
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (practices as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(eq(practices.isActive, true), ...conditions));
+        }
+      }
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (practices as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(practices.createdAt), desc(practices.id));
+        } else {
+          query = query.orderBy(desc(practices.createdAt), desc(practices.id));
+        }
+      } else {
+        query = query.orderBy(desc(practices.createdAt), desc(practices.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated practices:', error);
+      throw new Error(`Failed to get paginated practices: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPracticesCount(filters: SearchFilter[] = []): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(practices).where(eq(practices.isActive, true));
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (practices as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(eq(practices.isActive, true), ...conditions));
+        }
+      }
+      
+      const result = await query;
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting practices count:', error);
+      throw new Error(`Failed to get practices count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPracticesPaginated(searchQuery: string, pagination: PaginationQuery): Promise<SelectPractice[]> {
+    try {
+      const db = await this.getDb();
+      let query = db
+        .select()
+        .from(practices)
+        .where(
+          and(
+            eq(practices.isActive, true),
+            or(
+              ilike(practices.name, `%${searchQuery}%`),
+              ilike(practices.specialty, `%${searchQuery}%`),
+              ilike(practices.primaryAddress, `%${searchQuery}%`)
+            )
+          )
+        );
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (practices as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(practices.createdAt), desc(practices.id));
+        } else {
+          query = query.orderBy(desc(practices.createdAt), desc(practices.id));
+        }
+      } else {
+        query = query.orderBy(desc(practices.createdAt), desc(practices.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error searching paginated practices:', error);
+      throw new Error(`Failed to search paginated practices: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPracticesCount(searchQuery: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db
+        .select({ count: count() })
+        .from(practices)
+        .where(
+          and(
+            eq(practices.isActive, true),
+            or(
+              ilike(practices.name, `%${searchQuery}%`),
+              ilike(practices.specialty, `%${searchQuery}%`),
+              ilike(practices.primaryAddress, `%${searchQuery}%`)
+            )
+          )
+        );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting search practices count:', error);
+      throw new Error(`Failed to get search practices count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysiciansByPracticePaginated(practiceId: string, pagination: PaginationQuery): Promise<SelectPhysician[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicians).where(eq(physicians.practiceId, practiceId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicians as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicians.createdAt), desc(physicians.id));
+        } else {
+          query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physicians by practice:', error);
+      throw new Error(`Failed to get paginated physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysiciansByPracticeCount(practiceId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicians).where(eq(physicians.practiceId, practiceId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physicians count by practice:', error);
+      throw new Error(`Failed to get physicians count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Physician operations
   async createPhysician(physician: InsertPhysician): Promise<SelectPhysician> {
     try {
@@ -671,6 +981,184 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  async getAllPhysiciansPaginated(pagination: PaginationQuery, filters: SearchFilter[] = []): Promise<SelectPhysician[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicians);
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (physicians as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+      }
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicians as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicians.createdAt), desc(physicians.id));
+        } else {
+          query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physicians:', error);
+      throw new Error(`Failed to get paginated physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPhysiciansCount(filters: SearchFilter[] = []): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(physicians);
+      
+      // Apply filters
+      if (filters.length > 0) {
+        const conditions = filters.map(filter => {
+          const column = (physicians as any)[filter.field];
+          if (!column) return null;
+          
+          switch (filter.operator) {
+            case 'eq':
+              return eq(column, filter.value);
+            case 'like':
+              return ilike(column, `%${filter.value}%`);
+            default:
+              return null;
+          }
+        }).filter(Boolean);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+      }
+      
+      const result = await query;
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physicians count:', error);
+      throw new Error(`Failed to get physicians count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPhysiciansPaginated(searchQuery: string, pagination: PaginationQuery): Promise<SelectPhysician[]> {
+    try {
+      const db = await this.getDb();
+      let query = db
+        .select()
+        .from(physicians)
+        .where(
+          or(
+            ilike(physicians.fullLegalName, `%${searchQuery}%`),
+            like(physicians.npi, `%${searchQuery}%`),
+            ilike(physicians.practiceName, `%${searchQuery}%`),
+            ilike(physicians.emailAddress, `%${searchQuery}%`)
+          )
+        );
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicians as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicians.createdAt), desc(physicians.id));
+        } else {
+          query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error searching paginated physicians:', error);
+      throw new Error(`Failed to search paginated physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPhysiciansCount(searchQuery: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db
+        .select({ count: count() })
+        .from(physicians)
+        .where(
+          or(
+            ilike(physicians.fullLegalName, `%${searchQuery}%`),
+            like(physicians.npi, `%${searchQuery}%`),
+            ilike(physicians.practiceName, `%${searchQuery}%`),
+            ilike(physicians.emailAddress, `%${searchQuery}%`)
+          )
+        );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting search physicians count:', error);
+      throw new Error(`Failed to get search physicians count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysiciansByStatusPaginated(status: GenericStatus, pagination: PaginationQuery): Promise<SelectPhysician[]> {
+    try {
+      // Validate enum value
+      const validatedStatus = validateGenericStatus(status);
+      
+      const db = await this.getDb();
+      let query = db.select().from(physicians).where(eq(physicians.status, validatedStatus));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicians as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicians.createdAt), desc(physicians.id));
+        } else {
+          query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicians.createdAt), desc(physicians.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physicians by status:', error);
+      throw new Error(`Failed to get paginated physicians: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysiciansByStatusCount(status: GenericStatus): Promise<number> {
+    try {
+      // Validate enum value
+      const validatedStatus = validateGenericStatus(status);
+      
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicians).where(eq(physicians.status, validatedStatus));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physicians count by status:', error);
+      throw new Error(`Failed to get physicians count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Physician License operations
   async createPhysicianLicense(license: InsertPhysicianLicense): Promise<SelectPhysicianLicense> {
     try {
@@ -754,6 +1242,100 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error getting expiring licenses:', error);
       throw new Error(`Failed to get expiring licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianLicensesPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianLicense[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicianLicenses).where(eq(physicianLicenses.physicianId, physicianId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianLicenses as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+        } else {
+          query = query.orderBy(desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physician licenses:', error);
+      throw new Error(`Failed to get paginated physician licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianLicensesCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicianLicenses).where(eq(physicianLicenses.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physician licenses count:', error);
+      throw new Error(`Failed to get physician licenses count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringLicensesPaginated(days: number, pagination: PaginationQuery): Promise<SelectPhysicianLicense[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      let query = db
+        .select()
+        .from(physicianLicenses)
+        .where(
+          and(
+            sql`${physicianLicenses.expirationDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${physicianLicenses.expirationDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianLicenses as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+        } else {
+          query = query.orderBy(desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianLicenses.createdAt), desc(physicianLicenses.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated expiring licenses:', error);
+      throw new Error(`Failed to get paginated expiring licenses: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringLicensesCount(days: number): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      const result = await db
+        .select({ count: count() })
+        .from(physicianLicenses)
+        .where(
+          and(
+            sql`${physicianLicenses.expirationDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${physicianLicenses.expirationDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting expiring licenses count:', error);
+      throw new Error(`Failed to get expiring licenses count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -843,6 +1425,100 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  async getPhysicianCertificationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianCertification[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicianCertifications).where(eq(physicianCertifications.physicianId, physicianId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianCertifications as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+        } else {
+          query = query.orderBy(desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physician certifications:', error);
+      throw new Error(`Failed to get paginated physician certifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianCertificationsCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicianCertifications).where(eq(physicianCertifications.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physician certifications count:', error);
+      throw new Error(`Failed to get physician certifications count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringCertificationsPaginated(days: number, pagination: PaginationQuery): Promise<SelectPhysicianCertification[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      let query = db
+        .select()
+        .from(physicianCertifications)
+        .where(
+          and(
+            sql`${physicianCertifications.expirationDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${physicianCertifications.expirationDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianCertifications as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+        } else {
+          query = query.orderBy(desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianCertifications.createdAt), desc(physicianCertifications.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated expiring certifications:', error);
+      throw new Error(`Failed to get paginated expiring certifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringCertificationsCount(days: number): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      const result = await db
+        .select({ count: count() })
+        .from(physicianCertifications)
+        .where(
+          and(
+            sql`${physicianCertifications.expirationDate} <= ${futureDate.toISOString().split('T')[0]}`,
+            sql`${physicianCertifications.expirationDate} >= ${new Date().toISOString().split('T')[0]}`
+          )
+        );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting expiring certifications count:', error);
+      throw new Error(`Failed to get expiring certifications count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Physician Education operations
   async createPhysicianEducation(education: InsertPhysicianEducation): Promise<SelectPhysicianEducation> {
     try {
@@ -876,6 +1552,42 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error getting physician educations:', error);
       throw new Error(`Failed to get physician educations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianEducationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianEducation[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicianEducation).where(eq(physicianEducation.physicianId, physicianId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianEducation as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianEducation.createdAt), desc(physicianEducation.id));
+        } else {
+          query = query.orderBy(desc(physicianEducation.createdAt), desc(physicianEducation.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianEducation.createdAt), desc(physicianEducation.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physician educations:', error);
+      throw new Error(`Failed to get paginated physician educations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianEducationsCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicianEducation).where(eq(physicianEducation.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physician educations count:', error);
+      throw new Error(`Failed to get physician educations count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -944,6 +1656,42 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  async getPhysicianWorkHistoriesPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianWorkHistory[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicianWorkHistory).where(eq(physicianWorkHistory.physicianId, physicianId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianWorkHistory as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianWorkHistory.createdAt), desc(physicianWorkHistory.id));
+        } else {
+          query = query.orderBy(desc(physicianWorkHistory.createdAt), desc(physicianWorkHistory.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianWorkHistory.createdAt), desc(physicianWorkHistory.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physician work histories:', error);
+      throw new Error(`Failed to get paginated physician work histories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianWorkHistoriesCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicianWorkHistory).where(eq(physicianWorkHistory.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physician work histories count:', error);
+      throw new Error(`Failed to get physician work histories count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async updatePhysicianWorkHistory(id: string, updates: Partial<InsertPhysicianWorkHistory>): Promise<SelectPhysicianWorkHistory> {
     try {
       const db = await this.getDb();
@@ -1006,6 +1754,42 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error getting physician hospital affiliations:', error);
       throw new Error(`Failed to get physician hospital affiliations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianHospitalAffiliationsPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPhysicianHospitalAffiliation[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.physicianId, physicianId));
+      
+      // Apply sorting with stable ordering
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        const column = (physicianHospitalAffiliations as any)[pagination.sort];
+        if (column) {
+          query = query.orderBy(orderDirection(column), desc(physicianHospitalAffiliations.createdAt), desc(physicianHospitalAffiliations.id));
+        } else {
+          query = query.orderBy(desc(physicianHospitalAffiliations.createdAt), desc(physicianHospitalAffiliations.id));
+        }
+      } else {
+        query = query.orderBy(desc(physicianHospitalAffiliations.createdAt), desc(physicianHospitalAffiliations.id));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated physician hospital affiliations:', error);
+      throw new Error(`Failed to get paginated physician hospital affiliations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPhysicianHospitalAffiliationsCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(physicianHospitalAffiliations).where(eq(physicianHospitalAffiliations.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting physician hospital affiliations count:', error);
+      throw new Error(`Failed to get physician hospital affiliations count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -2920,6 +3704,437 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting payer enrollment:', error);
       throw new Error(`Failed to delete payer enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPayerEnrollments(): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payerEnrollments).orderBy(desc(payerEnrollments.createdAt));
+    } catch (error) {
+      console.error('Error getting all payer enrollments:', error);
+      throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Paginated payer enrollment methods
+  async getAllPayerEnrollmentsPaginated(pagination: PaginationQuery, filters: SearchFilter[] = []): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payerEnrollments);
+      
+      // Apply filters if provided
+      if (filters.length > 0) {
+        // Apply basic search filter logic
+        const searchConditions = filters.map(filter => {
+          switch (filter.operator) {
+            case 'eq':
+              return eq((payerEnrollments as any)[filter.field], filter.value);
+            case 'like':
+              return like((payerEnrollments as any)[filter.field], `%${filter.value}%`);
+            case 'ilike':
+              return ilike((payerEnrollments as any)[filter.field], `%${filter.value}%`);
+            default:
+              return eq((payerEnrollments as any)[filter.field], filter.value);
+          }
+        });
+        query = query.where(and(...searchConditions));
+      }
+      
+      // Apply sorting
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(desc(payerEnrollments.createdAt));
+      }
+      
+      // Apply pagination
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payer enrollments:', error);
+      throw new Error(`Failed to get paginated payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPayerEnrollmentsCount(filters: SearchFilter[] = []): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(payerEnrollments);
+      
+      // Apply filters if provided
+      if (filters.length > 0) {
+        const searchConditions = filters.map(filter => {
+          switch (filter.operator) {
+            case 'eq':
+              return eq((payerEnrollments as any)[filter.field], filter.value);
+            case 'like':
+              return like((payerEnrollments as any)[filter.field], `%${filter.value}%`);
+            case 'ilike':
+              return ilike((payerEnrollments as any)[filter.field], `%${filter.value}%`);
+            default:
+              return eq((payerEnrollments as any)[filter.field], filter.value);
+          }
+        });
+        query = query.where(and(...searchConditions));
+      }
+      
+      const result = await query;
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payer enrollments count:', error);
+      throw new Error(`Failed to get payer enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPhysicianPaginated(physicianId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payerEnrollments).where(eq(payerEnrollments.physicianId, physicianId));
+      
+      // Apply sorting
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(desc(payerEnrollments.createdAt));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payer enrollments by physician:', error);
+      throw new Error(`Failed to get paginated payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPhysicianCount(physicianId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payerEnrollments).where(eq(payerEnrollments.physicianId, physicianId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payer enrollments count by physician:', error);
+      throw new Error(`Failed to get payer enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPayerPaginated(payerId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payerEnrollments).where(eq(payerEnrollments.payerId, payerId));
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(desc(payerEnrollments.createdAt));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payer enrollments by payer:', error);
+      throw new Error(`Failed to get paginated payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPayerCount(payerId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payerEnrollments).where(eq(payerEnrollments.payerId, payerId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payer enrollments count by payer:', error);
+      throw new Error(`Failed to get payer enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByLocationPaginated(locationId: string, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payerEnrollments).where(eq(payerEnrollments.practiceLocationId, locationId));
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(desc(payerEnrollments.createdAt));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payer enrollments by location:', error);
+      throw new Error(`Failed to get paginated payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByLocationCount(locationId: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payerEnrollments).where(eq(payerEnrollments.practiceLocationId, locationId));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payer enrollments count by location:', error);
+      throw new Error(`Failed to get payer enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByStatusPaginated(status: EnrollmentStatus, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status));
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(desc(payerEnrollments.createdAt));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payer enrollments by status:', error);
+      throw new Error(`Failed to get paginated payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByStatusCount(status: EnrollmentStatus): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payer enrollments count by status:', error);
+      throw new Error(`Failed to get payer enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringEnrollmentsPaginated(days: number, pagination: PaginationQuery): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + days);
+      
+      let query = db.select().from(payerEnrollments).where(
+        and(
+          lt(payerEnrollments.revalidationDate!, expirationDate),
+          or(
+            eq(payerEnrollments.enrollmentStatus, 'active'),
+            eq(payerEnrollments.enrollmentStatus, 'approved')
+          )
+        )
+      );
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payerEnrollments as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(asc(payerEnrollments.revalidationDate));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated expiring enrollments:', error);
+      throw new Error(`Failed to get paginated expiring enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringEnrollmentsCount(days: number): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + days);
+      
+      const result = await db.select({ count: count() }).from(payerEnrollments).where(
+        and(
+          lt(payerEnrollments.revalidationDate!, expirationDate),
+          or(
+            eq(payerEnrollments.enrollmentStatus, 'active'),
+            eq(payerEnrollments.enrollmentStatus, 'approved')
+          )
+        )
+      );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting expiring enrollments count:', error);
+      throw new Error(`Failed to get expiring enrollments count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Paginated payer methods
+  async getAllPayersPaginated(pagination: PaginationQuery, filters: SearchFilter[] = []): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payers).where(eq(payers.isActive, true));
+      
+      // Apply filters if provided
+      if (filters.length > 0) {
+        const searchConditions = filters.map(filter => {
+          switch (filter.operator) {
+            case 'eq':
+              return eq((payers as any)[filter.field], filter.value);
+            case 'like':
+              return like((payers as any)[filter.field], `%${filter.value}%`);
+            case 'ilike':
+              return ilike((payers as any)[filter.field], `%${filter.value}%`);
+            default:
+              return eq((payers as any)[filter.field], filter.value);
+          }
+        });
+        query = query.where(and(eq(payers.isActive, true), ...searchConditions));
+      }
+      
+      // Apply sorting
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payers as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(asc(payers.name));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payers:', error);
+      throw new Error(`Failed to get paginated payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPayersCount(filters: SearchFilter[] = []): Promise<number> {
+    try {
+      const db = await this.getDb();
+      let query = db.select({ count: count() }).from(payers).where(eq(payers.isActive, true));
+      
+      // Apply filters if provided
+      if (filters.length > 0) {
+        const searchConditions = filters.map(filter => {
+          switch (filter.operator) {
+            case 'eq':
+              return eq((payers as any)[filter.field], filter.value);
+            case 'like':
+              return like((payers as any)[filter.field], `%${filter.value}%`);
+            case 'ilike':
+              return ilike((payers as any)[filter.field], `%${filter.value}%`);
+            default:
+              return eq((payers as any)[filter.field], filter.value);
+          }
+        });
+        query = query.where(and(eq(payers.isActive, true), ...searchConditions));
+      }
+      
+      const result = await query;
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payers count:', error);
+      throw new Error(`Failed to get payers count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPayersPaginated(searchQuery: string, pagination: PaginationQuery): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payers).where(
+        and(
+          eq(payers.isActive, true),
+          ilike(payers.name, `%${searchQuery}%`)
+        )
+      );
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payers as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(asc(payers.name));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error searching paginated payers:', error);
+      throw new Error(`Failed to search paginated payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPayersCount(searchQuery: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payers).where(
+        and(
+          eq(payers.isActive, true),
+          ilike(payers.name, `%${searchQuery}%`)
+        )
+      );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting search payers count:', error);
+      throw new Error(`Failed to get search payers count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayersByLineOfBusinessPaginated(lineOfBusiness: string, pagination: PaginationQuery): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payers).where(
+        and(
+          eq(payers.isActive, true),
+          sql`${lineOfBusiness} = ANY(${payers.linesOfBusiness})`
+        )
+      );
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payers as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(asc(payers.name));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payers by line of business:', error);
+      throw new Error(`Failed to get paginated payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayersByLineOfBusinessCount(lineOfBusiness: string): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payers).where(
+        and(
+          eq(payers.isActive, true),
+          sql`${lineOfBusiness} = ANY(${payers.linesOfBusiness})`
+        )
+      );
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payers count by line of business:', error);
+      throw new Error(`Failed to get payers count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayersByStatusPaginated(isActive: boolean, pagination: PaginationQuery): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(payers).where(eq(payers.isActive, isActive));
+      
+      if (pagination.sort) {
+        const orderDirection = pagination.order === 'asc' ? asc : desc;
+        query = query.orderBy(orderDirection((payers as any)[pagination.sort]));
+      } else {
+        query = query.orderBy(asc(payers.name));
+      }
+      
+      return await query.limit(pagination.limit).offset(pagination.offset!);
+    } catch (error) {
+      console.error('Error getting paginated payers by status:', error);
+      throw new Error(`Failed to get paginated payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayersByStatusCount(isActive: boolean): Promise<number> {
+    try {
+      const db = await this.getDb();
+      const result = await db.select({ count: count() }).from(payers).where(eq(payers.isActive, isActive));
+      return result[0].count;
+    } catch (error) {
+      console.error('Error getting payers count by status:', error);
+      throw new Error(`Failed to get payers count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

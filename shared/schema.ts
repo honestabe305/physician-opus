@@ -1,4 +1,4 @@
-import { boolean, date, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar, check, unique } from 'drizzle-orm/pg-core';
+import { boolean, date, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid, varchar, check, unique, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -227,7 +227,16 @@ export const physicians = pgTable('physicians', {
   createdBy: uuid('created_by').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  // Performance indexes for common query patterns
+  practiceIdIdx: index('idx_physicians_practice_id').on(table.practiceId),
+  statusIdx: index('idx_physicians_status').on(table.status),
+  providerRoleIdx: index('idx_physicians_provider_role').on(table.providerRole),
+  clinicianTypeIdx: index('idx_physicians_clinician_type').on(table.clinicianType),
+  createdAtIdx: index('idx_physicians_created_at').on(table.createdAt),
+  fullLegalNameIdx: index('idx_physicians_full_legal_name').on(table.fullLegalName),
+  practiceStatusIdx: index('idx_physicians_practice_status').on(table.practiceId, table.status)
+}));
 
 export const physicianLicenses = pgTable('physician_licenses', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -450,6 +459,12 @@ export const payers = pgTable('payers', {
   linesOfBusinessNotEmpty: check('lines_of_business_not_empty', sql`array_length(lines_of_business, 1) > 0`),
   // Note: Business logic should enforce unique active payer names
   // This would require application-level validation due to Drizzle limitations
+  
+  // Performance indexes for common query patterns
+  isActiveIdx: index('idx_payers_is_active').on(table.isActive),
+  nameIdx: index('idx_payers_name').on(table.name),
+  createdAtIdx: index('idx_payers_created_at').on(table.createdAt),
+  activeNameIdx: index('idx_payers_active_name').on(table.isActive, table.name)
 }));
 
 // Practice Locations table for enrollment per location
@@ -490,7 +505,18 @@ export const practiceLocations = pgTable('practice_locations', {
   zip4Format: check('zip4_format', sql`zip_4 IS NULL OR (length(zip_4) = 4 AND zip_4 ~ '^[0-9]{4}$')`),
   locationNameNotEmpty: check('location_name_not_empty', sql`length(trim(location_name)) > 0`),
   cityNotEmpty: check('city_not_empty', sql`length(trim(city)) > 0`),
-  streetAddress1NotEmpty: check('street_address_1_not_empty', sql`length(trim(street_address_1)) > 0`)
+  streetAddress1NotEmpty: check('street_address_1_not_empty', sql`length(trim(street_address_1)) > 0`),
+  
+  // Performance indexes for common query patterns
+  practiceIdIdx: index('idx_practice_locations_practice_id').on(table.practiceId),
+  stateIdx: index('idx_practice_locations_state').on(table.state),
+  zipCodeIdx: index('idx_practice_locations_zip_code').on(table.zipCode),
+  placeTypeIdx: index('idx_practice_locations_place_type').on(table.placeType),
+  isActiveIdx: index('idx_practice_locations_is_active').on(table.isActive),
+  locationNameIdx: index('idx_practice_locations_location_name').on(table.locationName),
+  createdAtIdx: index('idx_practice_locations_created_at').on(table.createdAt),
+  practiceActiveIdx: index('idx_practice_locations_practice_active').on(table.practiceId, table.isActive),
+  stateActiveIdx: index('idx_practice_locations_state_active').on(table.state, table.isActive)
 }));
 
 // Banking/EFT information for providers
@@ -619,7 +645,44 @@ export const payerEnrollments = pgTable('payer_enrollments', {
   welcomeLetterUrlFormat: check('welcome_letter_url_format', sql`welcome_letter_url IS NULL OR welcome_letter_url ~ '^https?:\/\/'`),
   
   // Unique constraint: one active enrollment per physician-payer-location combination
-  uniqueActiveEnrollment: unique('unique_active_enrollment').on(table.physicianId, table.payerId, table.practiceLocationId)
+  uniqueActiveEnrollment: unique('unique_active_enrollment').on(table.physicianId, table.payerId, table.practiceLocationId),
+  
+  // Performance indexes for common query patterns
+  enrollmentStatusIdx: index('idx_payer_enrollments_status').on(table.enrollmentStatus),
+  physicianIdIdx: index('idx_payer_enrollments_physician_id').on(table.physicianId),
+  payerIdIdx: index('idx_payer_enrollments_payer_id').on(table.payerId),
+  practiceLocationIdIdx: index('idx_payer_enrollments_location_id').on(table.practiceLocationId),
+  createdAtIdx: index('idx_payer_enrollments_created_at').on(table.createdAt),
+  nextActionDueDateIdx: index('idx_payer_enrollments_next_action_due').on(table.nextActionDueDate),
+  
+  // Composite indexes for common query combinations
+  statusCreatedAtIdx: index('idx_payer_enrollments_status_created_at').on(table.enrollmentStatus, table.createdAt),
+  physicianStatusIdx: index('idx_payer_enrollments_physician_status').on(table.physicianId, table.enrollmentStatus),
+  payerStatusIdx: index('idx_payer_enrollments_payer_status').on(table.payerId, table.enrollmentStatus),
+  locationStatusIdx: index('idx_payer_enrollments_location_status').on(table.practiceLocationId, table.enrollmentStatus),
+  
+  // Date-range indexes for date fields (critical for production performance)
+  submittedDateIdx: index('idx_payer_enrollments_submitted_date').on(table.submittedDate),
+  approvedDateIdx: index('idx_payer_enrollments_approved_date').on(table.approvedDate),
+  effectiveDateIdx: index('idx_payer_enrollments_effective_date').on(table.effectiveDate),
+  revalidationDateIdx: index('idx_payer_enrollments_revalidation_date').on(table.revalidationDate),
+  reCredentialingDateIdx: index('idx_payer_enrollments_re_credentialing_date').on(table.reCredentialingDate),
+  stoppedDateIdx: index('idx_payer_enrollments_stopped_date').on(table.stoppedDate),
+  
+  // Additional composite indexes for frequent query patterns
+  statusPhysicianIdx: index('idx_payer_enrollments_status_physician').on(table.enrollmentStatus, table.physicianId),
+  statusPayerIdx: index('idx_payer_enrollments_status_payer').on(table.enrollmentStatus, table.payerId), 
+  statusLocationIdx: index('idx_payer_enrollments_status_location').on(table.enrollmentStatus, table.practiceLocationId),
+  statusNextActionIdx: index('idx_payer_enrollments_status_next_action').on(table.enrollmentStatus, table.nextActionDueDate),
+  
+  // Covering indexes for ORDER BY/LIMIT patterns (production critical)
+  statusCreatedAtCoveringIdx: index('idx_payer_enrollments_status_created_covering').on(table.enrollmentStatus, table.createdAt, table.id, table.physicianId, table.payerId),
+  physicianCreatedAtCoveringIdx: index('idx_payer_enrollments_physician_created_covering').on(table.physicianId, table.createdAt, table.id, table.enrollmentStatus),
+  payerCreatedAtCoveringIdx: index('idx_payer_enrollments_payer_created_covering').on(table.payerId, table.createdAt, table.id, table.enrollmentStatus),
+  
+  // Dashboard aggregation indexes
+  statusGroupingIdx: index('idx_payer_enrollments_status_grouping').on(table.enrollmentStatus, table.createdAt, table.updatedAt),
+  payerEnrollmentCountIdx: index('idx_payer_enrollments_payer_count').on(table.payerId, table.enrollmentStatus, table.createdAt)
 }));
 
 // Insert Schemas and Types

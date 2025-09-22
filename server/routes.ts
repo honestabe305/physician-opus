@@ -41,6 +41,15 @@ import {
   type SelectProfessionalReference,
   type SelectPayerEnrollment
 } from '../shared/schema';
+import { 
+  paginationMiddleware, 
+  createPaginatedResponse, 
+  cursorPaginationMiddleware,
+  createCursorPaginatedResponse,
+  advancedFilterMiddleware,
+  type PaginationQuery 
+} from './middleware/pagination-middleware';
+import { DashboardService } from './services/dashboard-service';
 import { z } from 'zod';
 import {
   renewalStatusSchema,
@@ -269,6 +278,101 @@ router.get('/analytics/document-completeness', authMiddleware, asyncHandler(asyn
   } catch (error) {
     console.error('Error fetching document completeness:', error);
     res.status(500).json({ error: 'Failed to fetch document completeness' });
+  }
+}));
+
+// ============================
+// OPTIMIZED DASHBOARD ROUTES (Server-side aggregations)
+// ============================
+
+// GET /api/dashboard/data - Get comprehensive dashboard data with server-side aggregations
+router.get('/dashboard/data', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const dashboardData = await DashboardService.getDashboardData();
+    res.json(dashboardData);
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+  }
+}));
+
+// GET /api/dashboard/enrollment-stats - Get enrollment statistics
+router.get('/dashboard/enrollment-stats', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let stats;
+    if (startDate && endDate) {
+      stats = await DashboardService.getEnrollmentStatsByDateRange(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+    } else {
+      stats = await DashboardService.getEnrollmentStats();
+    }
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching enrollment stats:', error);
+    res.status(500).json({ error: 'Failed to fetch enrollment stats' });
+  }
+}));
+
+// GET /api/dashboard/recent-enrollments - Get recent enrollments with joins
+router.get('/dashboard/recent-enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { limit = 10 } = req.query;
+    const recentEnrollments = await DashboardService.getRecentEnrollments(parseInt(limit as string));
+    res.json(recentEnrollments);
+  } catch (error) {
+    console.error('Error fetching recent enrollments:', error);
+    res.status(500).json({ error: 'Failed to fetch recent enrollments' });
+  }
+}));
+
+// GET /api/dashboard/upcoming-deadlines - Get upcoming deadlines
+router.get('/dashboard/upcoming-deadlines', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { limit = 5 } = req.query;
+    const deadlines = await DashboardService.getUpcomingDeadlines(parseInt(limit as string));
+    res.json(deadlines);
+  } catch (error) {
+    console.error('Error fetching upcoming deadlines:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming deadlines' });
+  }
+}));
+
+// GET /api/dashboard/payer-summary - Get payer summary with enrollment counts
+router.get('/dashboard/payer-summary', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const payerSummary = await DashboardService.getPayerSummary();
+    res.json(payerSummary);
+  } catch (error) {
+    console.error('Error fetching payer summary:', error);
+    res.status(500).json({ error: 'Failed to fetch payer summary' });
+  }
+}));
+
+// GET /api/dashboard/enrollment-trends - Get enrollment trends for analytics
+router.get('/dashboard/enrollment-trends', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const { days = 30 } = req.query;
+    const trends = await DashboardService.getEnrollmentTrends(parseInt(days as string));
+    res.json(trends);
+  } catch (error) {
+    console.error('Error fetching enrollment trends:', error);
+    res.status(500).json({ error: 'Failed to fetch enrollment trends' });
+  }
+}));
+
+// GET /api/dashboard/performance-metrics - Get performance metrics
+router.get('/dashboard/performance-metrics', authMiddleware, asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await DashboardService.getPerformanceMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error fetching performance metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch performance metrics' });
   }
 }));
 
@@ -823,9 +927,11 @@ router.post('/profiles', asyncHandler(async (req: any, res: any) => {
   res.status(201).json(profile);
 }));
 
-router.get('/profiles', asyncHandler(async (req: any, res: any) => {
-  const profiles = await storage.getAllProfiles();
-  res.json(profiles);
+router.get('/profiles', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const profiles = await storage.getAllProfilesPaginated(pagination);
+  const total = await storage.getAllProfilesCount();
+  res.json(createPaginatedResponse(profiles, total, pagination));
 }));
 
 router.get('/profiles/:id', asyncHandler(async (req: any, res: any) => {
@@ -862,18 +968,23 @@ router.post('/practices', asyncHandler(async (req: any, res: any) => {
   res.status(201).json(practice);
 }));
 
-router.get('/practices', asyncHandler(async (req: any, res: any) => {
+router.get('/practices', paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const filters = req.filters || [];
   const { search } = req.query;
   
   let practices: SelectPractice[];
+  let total: number;
   
   if (search) {
-    practices = await storage.searchPractices(search as string);
+    practices = await storage.searchPracticesPaginated(search as string, pagination);
+    total = await storage.searchPracticesCount(search as string);
   } else {
-    practices = await storage.getAllPractices();
+    practices = await storage.getAllPracticesPaginated(pagination, filters);
+    total = await storage.getAllPracticesCount(filters);
   }
   
-  res.json(practices);
+  res.json(createPaginatedResponse(practices, total, pagination));
 }));
 
 router.get('/practices/:id', asyncHandler(async (req: any, res: any) => {
@@ -884,9 +995,11 @@ router.get('/practices/:id', asyncHandler(async (req: any, res: any) => {
   res.json(practice);
 }));
 
-router.get('/practices/:id/clinicians', asyncHandler(async (req: any, res: any) => {
-  const clinicians = await storage.getPhysiciansByPractice(req.params.id);
-  res.json(clinicians);
+router.get('/practices/:id/clinicians', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const clinicians = await storage.getPhysiciansByPracticePaginated(req.params.id, pagination);
+  const total = await storage.getPhysiciansByPracticeCount(req.params.id);
+  res.json(createPaginatedResponse(clinicians, total, pagination));
 }));
 
 router.get('/practices/name/:name', asyncHandler(async (req: any, res: any) => {
@@ -1108,36 +1221,28 @@ router.post('/physicians', asyncHandler(async (req: any, res: any) => {
   res.status(201).json(physician);
 }));
 
-router.get('/physicians', asyncHandler(async (req: any, res: any) => {
-  const { search, status, limit, offset } = req.query;
+router.get('/physicians', paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const filters = req.filters || [];
+  const { search, status } = req.query;
   
   let physicians: SelectPhysician[];
+  let total: number;
   
   if (search) {
-    physicians = await storage.searchPhysicians(search as string);
+    physicians = await storage.searchPhysiciansPaginated(search as string, pagination);
+    total = await storage.searchPhysiciansCount(search as string);
   } else if (status) {
     // Validate status using enum validation
     const validatedStatus = validateGenericStatus(status);
-    physicians = await storage.getPhysiciansByStatus(validatedStatus);
+    physicians = await storage.getPhysiciansByStatusPaginated(validatedStatus, pagination);
+    total = await storage.getPhysiciansByStatusCount(validatedStatus);
   } else {
-    physicians = await storage.getAllPhysicians();
+    physicians = await storage.getAllPhysiciansPaginated(pagination, filters);
+    total = await storage.getAllPhysiciansCount(filters);
   }
   
-  // Apply pagination if specified
-  if (limit || offset) {
-    const startIndex = parseInt(offset as string) || 0;
-    const endIndex = startIndex + (parseInt(limit as string) || physicians.length);
-    physicians = physicians.slice(startIndex, endIndex);
-  }
-  
-  res.json({
-    physicians,
-    total: physicians.length,
-    pagination: {
-      limit: parseInt(limit as string) || null,
-      offset: parseInt(offset as string) || 0
-    }
-  });
+  res.json(createPaginatedResponse(physicians, total, pagination));
 }));
 
 router.get('/physicians/:id', asyncHandler(async (req: any, res: any) => {
@@ -1218,9 +1323,11 @@ router.post('/physicians/:physicianId/licenses',
   })
 );
 
-router.get('/physicians/:physicianId/licenses', asyncHandler(async (req: any, res: any) => {
-  const licenses = await storage.getPhysicianLicenses(req.params.physicianId);
-  res.json(licenses);
+router.get('/physicians/:physicianId/licenses', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const licenses = await storage.getPhysicianLicensesPaginated(req.params.physicianId, pagination);
+  const total = await storage.getPhysicianLicensesCount(req.params.physicianId);
+  res.json(createPaginatedResponse(licenses, total, pagination));
 }));
 
 router.get('/licenses/:id', asyncHandler(async (req: any, res: any) => {
@@ -1231,13 +1338,15 @@ router.get('/licenses/:id', asyncHandler(async (req: any, res: any) => {
   res.json(license);
 }));
 
-router.get('/licenses/expiring/:days', asyncHandler(async (req: any, res: any) => {
+router.get('/licenses/expiring/:days', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
   const days = parseInt(req.params.days);
   if (isNaN(days) || days < 0) {
     return res.status(400).json({ error: 'Days must be a non-negative number' });
   }
-  const licenses = await storage.getExpiringLicenses(days);
-  res.json(licenses);
+  const pagination = req.pagination;
+  const licenses = await storage.getExpiringLicensesPaginated(days, pagination);
+  const total = await storage.getExpiringLicensesCount(days);
+  res.json(createPaginatedResponse(licenses, total, pagination));
 }));
 
 router.put('/licenses/:id', 
@@ -1271,9 +1380,11 @@ router.post('/physicians/:physicianId/certifications', asyncHandler(async (req: 
   res.status(201).json(certification);
 }));
 
-router.get('/physicians/:physicianId/certifications', asyncHandler(async (req: any, res: any) => {
-  const certifications = await storage.getPhysicianCertifications(req.params.physicianId);
-  res.json(certifications);
+router.get('/physicians/:physicianId/certifications', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const certifications = await storage.getPhysicianCertificationsPaginated(req.params.physicianId, pagination);
+  const total = await storage.getPhysicianCertificationsCount(req.params.physicianId);
+  res.json(createPaginatedResponse(certifications, total, pagination));
 }));
 
 router.get('/certifications/:id', asyncHandler(async (req: any, res: any) => {
@@ -1284,13 +1395,15 @@ router.get('/certifications/:id', asyncHandler(async (req: any, res: any) => {
   res.json(certification);
 }));
 
-router.get('/certifications/expiring/:days', asyncHandler(async (req: any, res: any) => {
+router.get('/certifications/expiring/:days', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
   const days = parseInt(req.params.days);
   if (isNaN(days) || days < 0) {
     return res.status(400).json({ error: 'Days must be a non-negative number' });
   }
-  const certifications = await storage.getExpiringCertifications(days);
-  res.json(certifications);
+  const pagination = req.pagination;
+  const certifications = await storage.getExpiringCertificationsPaginated(days, pagination);
+  const total = await storage.getExpiringCertificationsCount(days);
+  res.json(createPaginatedResponse(certifications, total, pagination));
 }));
 
 router.put('/certifications/:id', asyncHandler(async (req: any, res: any) => {
@@ -1314,9 +1427,11 @@ router.post('/physicians/:physicianId/education', asyncHandler(async (req: any, 
   res.status(201).json(education);
 }));
 
-router.get('/physicians/:physicianId/education', asyncHandler(async (req: any, res: any) => {
-  const education = await storage.getPhysicianEducations(req.params.physicianId);
-  res.json(education);
+router.get('/physicians/:physicianId/education', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const education = await storage.getPhysicianEducationsPaginated(req.params.physicianId, pagination);
+  const total = await storage.getPhysicianEducationsCount(req.params.physicianId);
+  res.json(createPaginatedResponse(education, total, pagination));
 }));
 
 router.get('/education/:id', asyncHandler(async (req: any, res: any) => {
@@ -1348,9 +1463,11 @@ router.post('/physicians/:physicianId/work-history', asyncHandler(async (req: an
   res.status(201).json(workHistory);
 }));
 
-router.get('/physicians/:physicianId/work-history', asyncHandler(async (req: any, res: any) => {
-  const workHistory = await storage.getPhysicianWorkHistories(req.params.physicianId);
-  res.json(workHistory);
+router.get('/physicians/:physicianId/work-history', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const workHistory = await storage.getPhysicianWorkHistoriesPaginated(req.params.physicianId, pagination);
+  const total = await storage.getPhysicianWorkHistoriesCount(req.params.physicianId);
+  res.json(createPaginatedResponse(workHistory, total, pagination));
 }));
 
 router.get('/work-history/:id', asyncHandler(async (req: any, res: any) => {
@@ -1382,9 +1499,11 @@ router.post('/physicians/:physicianId/hospital-affiliations', asyncHandler(async
   res.status(201).json(affiliation);
 }));
 
-router.get('/physicians/:physicianId/hospital-affiliations', asyncHandler(async (req: any, res: any) => {
-  const affiliations = await storage.getPhysicianHospitalAffiliations(req.params.physicianId);
-  res.json(affiliations);
+router.get('/physicians/:physicianId/hospital-affiliations', paginationMiddleware, asyncHandler(async (req: any, res: any) => {
+  const pagination = req.pagination;
+  const affiliations = await storage.getPhysicianHospitalAffiliationsPaginated(req.params.physicianId, pagination);
+  const total = await storage.getPhysicianHospitalAffiliationsCount(req.params.physicianId);
+  res.json(createPaginatedResponse(affiliations, total, pagination));
 }));
 
 router.get('/hospital-affiliations/:id', asyncHandler(async (req: any, res: any) => {
@@ -2446,14 +2565,19 @@ router.get('/test/auto-workflows', asyncHandler(async (req: any, res: any) => {
 // PAYERS MANAGEMENT ROUTES
 // ============================
 
-// GET /api/payers - Get all payers with optional filtering
-router.get('/api/payers', authMiddleware, asyncHandler(async (req: any, res: any) => {
+// GET /api/payers - Get all payers with optional filtering and pagination
+router.get('/api/payers', authMiddleware, paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
   try {
     const { search, lineOfBusiness, isActive } = req.query;
+    const pagination: PaginationQuery = req.pagination;
+    const filters = req.filters || [];
+    
+    let result;
+    let total = 0;
     
     if (search) {
-      const payers = await storage.searchPayers(search);
-      res.json(payers);
+      result = await storage.searchPayersPaginated(search, pagination);
+      total = await storage.searchPayersCount(search);
     } else if (lineOfBusiness) {
       // Validate line of business enum
       const validatedLineOfBusiness = validateLineOfBusiness(lineOfBusiness);
@@ -2463,16 +2587,22 @@ router.get('/api/payers', authMiddleware, asyncHandler(async (req: any, res: any
           details: validatedLineOfBusiness.error.errors 
         });
       }
-      const payers = await storage.getPayersByLineOfBusiness(validatedLineOfBusiness.data);
-      res.json(payers);
+      result = await storage.getPayersByLineOfBusinessPaginated(validatedLineOfBusiness.data, pagination);
+      total = await storage.getPayersByLineOfBusinessCount(validatedLineOfBusiness.data);
     } else if (isActive !== undefined) {
       const activeStatus = isActive === 'true';
-      const payers = await storage.getPayersByStatus(activeStatus);
-      res.json(payers);
+      result = await storage.getPayersByStatusPaginated(activeStatus, pagination);
+      total = await storage.getPayersByStatusCount(activeStatus);
     } else {
-      const payers = await storage.getAllPayers();
-      res.json(payers);
+      result = await storage.getAllPayersPaginated(pagination, filters);
+      total = await storage.getAllPayersCount(filters);
     }
+    
+    const paginatedResponse = createPaginatedResponse(result, total, pagination);
+    
+    // Add caching header for 10 minutes for payer data (changes less frequently)
+    res.set('Cache-Control', 'public, max-age=600');
+    res.json(paginatedResponse);
   } catch (error) {
     console.error('Error fetching payers:', error);
     res.status(500).json({ 
@@ -2636,14 +2766,23 @@ router.get('/api/payers/:id/enrollments', authMiddleware, asyncHandler(async (re
 // PRACTICE LOCATIONS ROUTES
 // ============================
 
-// GET /api/practice-locations - Get all practice locations
-router.get('/api/practice-locations', authMiddleware, asyncHandler(async (req: any, res: any) => {
+// GET /api/practice-locations - Get all practice locations with pagination
+router.get('/api/practice-locations', authMiddleware, paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
   try {
+    const pagination = req.pagination;
+    const filters = req.filters || [];
     const { practiceId, placeType, isActive } = req.query;
     
+    let result: any;
+    let total: number;
+    
     if (practiceId) {
-      const locations = await storage.getPracticeLocationsByPractice(practiceId);
-      res.json(locations);
+      result = await storage.getPracticeLocationsByPracticePaginated ? 
+        await storage.getPracticeLocationsByPracticePaginated(practiceId, pagination) :
+        await storage.getPracticeLocationsByPractice(practiceId);
+      total = await storage.getPracticeLocationsByPracticeCount ? 
+        await storage.getPracticeLocationsByPracticeCount(practiceId) :
+        result.length;
     } else if (placeType) {
       const validatedPlaceType = validatePlaceType(placeType);
       if (!validatedPlaceType.success) {
@@ -2652,16 +2791,34 @@ router.get('/api/practice-locations', authMiddleware, asyncHandler(async (req: a
           details: validatedPlaceType.error.errors 
         });
       }
-      const locations = await storage.getPracticeLocationsByType(validatedPlaceType.data);
-      res.json(locations);
+      result = await storage.getPracticeLocationsByTypePaginated ? 
+        await storage.getPracticeLocationsByTypePaginated(validatedPlaceType.data, pagination) :
+        await storage.getPracticeLocationsByType(validatedPlaceType.data);
+      total = await storage.getPracticeLocationsByTypeCount ? 
+        await storage.getPracticeLocationsByTypeCount(validatedPlaceType.data) :
+        result.length;
     } else if (isActive !== undefined) {
       const activeStatus = isActive === 'true';
-      const locations = await storage.getPracticeLocationsByStatus(activeStatus);
-      res.json(locations);
+      result = await storage.getPracticeLocationsByStatusPaginated ? 
+        await storage.getPracticeLocationsByStatusPaginated(activeStatus, pagination) :
+        await storage.getPracticeLocationsByStatus(activeStatus);
+      total = await storage.getPracticeLocationsByStatusCount ? 
+        await storage.getPracticeLocationsByStatusCount(activeStatus) :
+        result.length;
     } else {
-      const locations = await storage.getAllPracticeLocations();
-      res.json(locations);
+      result = await storage.getAllPracticeLocationsPaginated ? 
+        await storage.getAllPracticeLocationsPaginated(pagination, filters) :
+        await storage.getAllPracticeLocations();
+      total = await storage.getAllPracticeLocationsCount ? 
+        await storage.getAllPracticeLocationsCount(filters) :
+        result.length;
     }
+    
+    const paginatedResponse = createPaginatedResponse(result, total, pagination);
+    
+    // Add caching header for practice location data
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+    res.json(paginatedResponse);
   } catch (error) {
     console.error('Error fetching practice locations:', error);
     res.status(500).json({ 
@@ -3033,18 +3190,37 @@ router.delete('/api/provider-banking/:id',
 // PROFESSIONAL REFERENCES ROUTES
 // ============================
 
-// GET /api/professional-references - Get all professional references
-router.get('/api/professional-references', authMiddleware, asyncHandler(async (req: any, res: any) => {
+// GET /api/professional-references - Get all professional references with pagination
+router.get('/api/professional-references', authMiddleware, paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
   try {
+    const pagination = req.pagination;
+    const filters = req.filters || [];
     const { physicianId } = req.query;
     
+    let result: any;
+    let total: number;
+    
     if (physicianId) {
-      const references = await storage.getProfessionalReferencesByPhysician(physicianId);
-      res.json(references);
+      result = await storage.getProfessionalReferencesByPhysicianPaginated ? 
+        await storage.getProfessionalReferencesByPhysicianPaginated(physicianId, pagination) :
+        await storage.getProfessionalReferencesByPhysician(physicianId);
+      total = await storage.getProfessionalReferencesByPhysicianCount ? 
+        await storage.getProfessionalReferencesByPhysicianCount(physicianId) :
+        result.length;
     } else {
-      const references = await storage.getAllProfessionalReferences();
-      res.json(references);
+      result = await storage.getAllProfessionalReferencesPaginated ? 
+        await storage.getAllProfessionalReferencesPaginated(pagination, filters) :
+        await storage.getAllProfessionalReferences();
+      total = await storage.getAllProfessionalReferencesCount ? 
+        await storage.getAllProfessionalReferencesCount(filters) :
+        result.length;
     }
+    
+    const paginatedResponse = createPaginatedResponse(result, total, pagination);
+    
+    // Add caching header for professional references data  
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+    res.json(paginatedResponse);
   } catch (error) {
     console.error('Error fetching professional references:', error);
     res.status(500).json({ 
@@ -3156,20 +3332,25 @@ router.delete('/api/professional-references/:id', authMiddleware, adminMiddlewar
 // PAYER ENROLLMENTS ROUTES
 // ============================
 
-// GET /api/payer-enrollments - Get all payer enrollments with filtering
-router.get('/api/payer-enrollments', authMiddleware, asyncHandler(async (req: any, res: any) => {
+// GET /api/payer-enrollments - Get all payer enrollments with filtering and pagination
+router.get('/api/payer-enrollments', authMiddleware, paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
   try {
     const { physicianId, payerId, locationId, status, expiringDays } = req.query;
+    const pagination: PaginationQuery = req.pagination;
+    const filters = req.filters || [];
+    
+    let result;
+    let total = 0;
     
     if (physicianId) {
-      const enrollments = await storage.getPayerEnrollmentsByPhysician(physicianId);
-      res.json(enrollments);
+      result = await storage.getPayerEnrollmentsByPhysicianPaginated(physicianId, pagination);
+      total = await storage.getPayerEnrollmentsByPhysicianCount(physicianId);
     } else if (payerId) {
-      const enrollments = await storage.getPayerEnrollmentsByPayer(payerId);
-      res.json(enrollments);
+      result = await storage.getPayerEnrollmentsByPayerPaginated(payerId, pagination);
+      total = await storage.getPayerEnrollmentsByPayerCount(payerId);
     } else if (locationId) {
-      const enrollments = await storage.getPayerEnrollmentsByLocation(locationId);
-      res.json(enrollments);
+      result = await storage.getPayerEnrollmentsByLocationPaginated(locationId, pagination);
+      total = await storage.getPayerEnrollmentsByLocationCount(locationId);
     } else if (status) {
       const validatedStatus = validateEnrollmentStatus(status);
       if (!validatedStatus.success) {
@@ -3178,19 +3359,25 @@ router.get('/api/payer-enrollments', authMiddleware, asyncHandler(async (req: an
           details: validatedStatus.error.errors 
         });
       }
-      const enrollments = await storage.getPayerEnrollmentsByStatus(validatedStatus.data);
-      res.json(enrollments);
+      result = await storage.getPayerEnrollmentsByStatusPaginated(validatedStatus.data, pagination);
+      total = await storage.getPayerEnrollmentsByStatusCount(validatedStatus.data);
     } else if (expiringDays) {
       const days = parseInt(expiringDays);
       if (isNaN(days) || days < 0) {
         return res.status(400).json({ error: 'Invalid expiring days parameter' });
       }
-      const enrollments = await storage.getExpiringEnrollments(days);
-      res.json(enrollments);
+      result = await storage.getExpiringEnrollmentsPaginated(days, pagination);
+      total = await storage.getExpiringEnrollmentsCount(days);
     } else {
-      const enrollments = await storage.getAllPayerEnrollments();
-      res.json(enrollments);
+      result = await storage.getAllPayerEnrollmentsPaginated(pagination, filters);
+      total = await storage.getAllPayerEnrollmentsCount(filters);
     }
+    
+    const paginatedResponse = createPaginatedResponse(result, total, pagination);
+    
+    // Add caching header for 5 minutes for list data
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(paginatedResponse);
   } catch (error) {
     console.error('Error fetching payer enrollments:', error);
     res.status(500).json({ 

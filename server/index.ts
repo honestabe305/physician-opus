@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import path from 'path';
 import { router } from './routes';
 
@@ -15,6 +16,23 @@ const PORT = parseInt(process.env.PORT || '5000', 10);
 // Trust proxy configuration - MUST be before other middleware
 // Always trust proxy in Replit environment (both dev and production)
 app.set('trust proxy', 1); // Trust first proxy (required for Replit deployment)
+
+// Compression middleware - enable gzip compression for responses
+app.use(compression({
+  // Compress all responses over 1kb
+  threshold: 1024,
+  // Compression level (1-9, 6 is default good balance)
+  level: 6,
+  // Only compress if response will be >= 1kb
+  filter: (req, res) => {
+    // Don't compress if client doesn't support it
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Use default compression filter
+    return compression.filter(req, res);
+  }
+}));
 
 // Middleware setup
 app.use(cors({
