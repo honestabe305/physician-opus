@@ -1812,8 +1812,8 @@ router.delete('/user-settings/:userId', asyncHandler(async (req: any, res: any) 
 const notificationService = new NotificationService(storage);
 const scheduler = getScheduler(storage);
 
-// GET /api/notifications/upcoming - Get all upcoming notifications
-router.get('/notifications/upcoming', authMiddleware, asyncHandler(async (req: any, res: any) => {
+// GET /api/notifications/upcoming - Get all upcoming notifications (public for dashboard)
+router.get('/notifications/upcoming', asyncHandler(async (req: any, res: any) => {
   const days = parseInt(req.query.days as string) || 90;
   const notifications = await notificationService.getUpcomingNotifications(days);
   res.json(notifications);
