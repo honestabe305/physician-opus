@@ -43,8 +43,8 @@ import {
   type InsertPayer,
   type SelectPracticeLocation,
   type InsertPracticeLocation,
-  type SelectProviderBanking,
-  type InsertProviderBanking,
+  type SelectPracticeDocument,
+  type InsertPracticeDocument,
   type SelectProfessionalReference,
   type InsertProfessionalReference,
   type SelectPayerEnrollment,
@@ -86,7 +86,7 @@ export class MemoryStorage implements IStorage {
   private renewalWorkflows: SelectRenewalWorkflow[] = [];
   private payers: SelectPayer[] = [];
   private practiceLocations: SelectPracticeLocation[] = [];
-  private providerBanking: SelectProviderBanking[] = [];
+  private practiceDocuments: SelectPracticeDocument[] = [];
   private professionalReferences: SelectProfessionalReference[] = [];
   private payerEnrollments: SelectPayerEnrollment[] = [];
 
@@ -1124,126 +1124,104 @@ export class MemoryStorage implements IStorage {
     return [...this.practiceLocations];
   }
 
-  // Provider Banking operations
-  async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
-    // Encrypt sensitive fields before storage using enhanced encryption
-    const encryptedBanking = {
-      ...banking,
-      routingNumber: banking.routingNumber ? encrypt(banking.routingNumber, { dataType: 'banking' }) : banking.routingNumber,
-      accountNumber: banking.accountNumber ? encrypt(banking.accountNumber, { dataType: 'banking' }) : banking.accountNumber
-    };
-    
-    const newBanking: SelectProviderBanking = {
+  // Practice Documents operations (for group-level banking documents)
+  async createPracticeDocument(document: InsertPracticeDocument): Promise<SelectPracticeDocument> {
+    const newDocument: SelectPracticeDocument = {
       id: this.generateId(),
-      physicianId: encryptedBanking.physicianId,
-      bankName: encryptedBanking.bankName,
-      routingNumber: encryptedBanking.routingNumber,
-      accountNumber: encryptedBanking.accountNumber,
-      accountType: encryptedBanking.accountType ?? 'checking',
-      eftEnabled: encryptedBanking.eftEnabled ?? false,
-      eraEnabled: encryptedBanking.eraEnabled ?? false,
-      voidCheckUrl: encryptedBanking.voidCheckUrl ?? null,
-      bankLetterUrl: encryptedBanking.bankLetterUrl ?? null,
-      isActive: encryptedBanking.isActive ?? true,
+      practiceId: document.practiceId,
+      documentType: document.documentType,
+      documentName: document.documentName,
+      fileName: document.fileName,
+      filePath: document.filePath,
+      fileSize: document.fileSize ?? null,
+      mimeType: document.mimeType ?? null,
+      uploadedBy: document.uploadedBy ?? null,
+      version: document.version ?? 1,
+      isActive: document.isActive ?? true,
+      expirationDate: document.expirationDate ?? null,
+      notes: document.notes ?? null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    this.providerBanking.push(newBanking);
-    
-    // Return redacted data by default for security
-    return redactBankingData(newBanking);
+    this.practiceDocuments.push(newDocument);
+    return newDocument;
   }
 
-  // SECURE DEFAULT: Returns redacted banking data
-  async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
-    const result = this.providerBanking.find(b => b.id === id) || null;
-    if (!result) return null;
-    
-    // Return redacted version for secure display (default behavior)
-    return redactBankingData(result);
+  async getPracticeDocument(id: string): Promise<SelectPracticeDocument | null> {
+    return this.practiceDocuments.find(d => d.id === id) || null;
   }
 
-  // PRIVILEGED ACCESS: Returns decrypted banking data with role validation
-  async getProviderBankingDecrypted(id: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
-    // Validate privileged access
-    validatePrivilegedAccess(userId, role, 'getProviderBankingDecrypted');
-    
-    const result = this.providerBanking.find(b => b.id === id) || null;
-    if (!result) return null;
-    
-    // Decrypt sensitive fields for privileged access
-    return decryptBankingData(result, { userId, role, autoMigrate: true });
+  async getPracticeDocumentsByPractice(practiceId: string): Promise<SelectPracticeDocument[]> {
+    return this.practiceDocuments.filter(d => d.practiceId === practiceId && d.isActive);
   }
 
-  // SECURE DEFAULT: Returns redacted banking data by physician
-  async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
-    const result = this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
-    if (!result) return null;
-    
-    // Return redacted version for secure display (default behavior)
-    return redactBankingData(result);
+  async getPracticeDocumentsByType(practiceId: string, documentType: string): Promise<SelectPracticeDocument[]> {
+    return this.practiceDocuments.filter(d => 
+      d.practiceId === practiceId && 
+      d.documentType === documentType && 
+      d.isActive
+    );
   }
 
-  // PRIVILEGED ACCESS: Returns decrypted banking data by physician with role validation
-  async getProviderBankingByPhysicianDecrypted(physicianId: string, userId: string, role: string): Promise<SelectProviderBanking | null> {
-    // Validate privileged access
-    validatePrivilegedAccess(userId, role, 'getProviderBankingByPhysicianDecrypted');
-    
-    const result = this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
-    if (!result) return null;
-    
-    // Decrypt sensitive fields for privileged access
-    return decryptBankingData(result, { userId, role, autoMigrate: true });
+  async getAllPracticeDocuments(): Promise<SelectPracticeDocument[]> {
+    return this.practiceDocuments.filter(d => d.isActive);
   }
 
-  async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
-    const index = this.providerBanking.findIndex(b => b.id === id);
-    if (index === -1) throw new Error('Provider banking not found');
+  async getAllPracticeDocumentsPaginated(pagination: any, filters?: any[]): Promise<SelectPracticeDocument[]> {
+    let filtered = this.practiceDocuments.filter(d => d.isActive);
     
-    // Encrypt sensitive fields if they're being updated using enhanced encryption
-    const encryptedUpdates = {
+    // Apply filters
+    if (filters && filters.length > 0) {
+      for (const filter of filters) {
+        if (filter.field === 'documentName' && filter.value) {
+          filtered = filtered.filter(d => d.documentName.toLowerCase().includes(filter.value.toLowerCase()));
+        } else if (filter.field === 'documentType' && filter.value) {
+          filtered = filtered.filter(d => d.documentType === filter.value);
+        } else if (filter.field === 'practiceId' && filter.value) {
+          filtered = filtered.filter(d => d.practiceId === filter.value);
+        }
+      }
+    }
+    
+    // Apply pagination
+    const start = pagination.offset || 0;
+    const limit = pagination.limit || 25;
+    return filtered.slice(start, start + limit);
+  }
+
+  async getAllPracticeDocumentsCount(filters?: any[]): Promise<number> {
+    let filtered = this.practiceDocuments.filter(d => d.isActive);
+    
+    // Apply filters
+    if (filters && filters.length > 0) {
+      for (const filter of filters) {
+        if (filter.field === 'documentName' && filter.value) {
+          filtered = filtered.filter(d => d.documentName.toLowerCase().includes(filter.value.toLowerCase()));
+        } else if (filter.field === 'documentType' && filter.value) {
+          filtered = filtered.filter(d => d.documentType === filter.value);
+        } else if (filter.field === 'practiceId' && filter.value) {
+          filtered = filtered.filter(d => d.practiceId === filter.value);
+        }
+      }
+    }
+    
+    return filtered.length;
+  }
+
+  async updatePracticeDocument(id: string, updates: Partial<InsertPracticeDocument>): Promise<SelectPracticeDocument> {
+    const index = this.practiceDocuments.findIndex(d => d.id === id);
+    if (index === -1) throw new Error('Practice document not found');
+    
+    this.practiceDocuments[index] = {
+      ...this.practiceDocuments[index],
       ...updates,
       updatedAt: new Date()
     };
-    
-    if (updates.routingNumber !== undefined) {
-      encryptedUpdates.routingNumber = updates.routingNumber ? encrypt(updates.routingNumber, { dataType: 'banking' }) : updates.routingNumber;
-    }
-    if (updates.accountNumber !== undefined) {
-      encryptedUpdates.accountNumber = updates.accountNumber ? encrypt(updates.accountNumber, { dataType: 'banking' }) : updates.accountNumber;
-    }
-    
-    this.providerBanking[index] = {
-      ...this.providerBanking[index],
-      ...encryptedUpdates
-    };
-    
-    // Return redacted data by default for security
-    return redactBankingData(this.providerBanking[index]);
+    return this.practiceDocuments[index];
   }
 
-
-
-  async deleteProviderBanking(id: string): Promise<void> {
-    this.providerBanking = this.providerBanking.filter(b => b.id !== id);
-  }
-
-  /**
-   * Helper method to decrypt sensitive banking data fields
-   */
-  private decryptBankingData(banking: SelectProviderBanking): SelectProviderBanking {
-    try {
-      return {
-        ...banking,
-        routingNumber: banking.routingNumber ? decrypt(banking.routingNumber) : banking.routingNumber,
-        accountNumber: banking.accountNumber ? decrypt(banking.accountNumber) : banking.accountNumber
-      };
-    } catch (error) {
-      console.error('Error decrypting banking data - data may be corrupted or using old encryption:', error);
-      // For backward compatibility, if decryption fails, return original data
-      // In production, you might want to handle this differently
-      return banking;
-    }
+  async deletePracticeDocument(id: string): Promise<void> {
+    this.practiceDocuments = this.practiceDocuments.filter(d => d.id !== id);
   }
 
   // Professional Reference operations
@@ -1636,7 +1614,6 @@ export class MemoryStorage implements IStorage {
       deaRegistrations: await this.getDeaRegistrationsByPhysician(physicianId),
       csrLicenses: await this.getCsrLicensesByPhysician(physicianId),
       licenseDocuments: await this.getLicenseDocumentsByPhysician(physicianId),
-      providerBanking: await this.getProviderBankingByPhysician(physicianId),
       professionalReferences: await this.getProfessionalReferencesByPhysician(physicianId),
       payerEnrollments: await this.getPayerEnrollmentsByPhysician(physicianId)
     };
