@@ -53,7 +53,7 @@ const navigation = [
     items: [
       { title: "Demographics", url: "/demographics", icon: Users },
       { title: "Contact Info", url: "/contact", icon: FileText },
-      { title: "Practice Info", url: "/practice", icon: Building2 },
+      { title: "Practice Management", url: "/practices", icon: Building2 },
       { title: "Licensure", url: "/licensure", icon: Shield },
       { title: "DEA/CSR Management", url: "/dea-csr", icon: Shield },
       { title: "Education", url: "/education", icon: GraduationCap },
@@ -67,8 +67,8 @@ const navigation = [
       { title: "Enrollment Dashboard", url: "/payer-enrollment", icon: BarChart3 },
       { title: "Enrollments", url: "/payer-enrollment/enrollments", icon: Workflow },
       { title: "Payers", url: "/payer-enrollment/payers", icon: Building2 },
-      { title: "Practice Locations", url: "/payer-enrollment/practice-locations", icon: MapPin },
-      { title: "Practice Documents", url: "/payer-enrollment/banking", icon: FileText },
+      { title: "Practice Locations", url: "/practices?section=locations", icon: MapPin },
+      { title: "Banking Documents", url: "/payer-enrollment/banking", icon: CreditCard },
       { title: "Professional References", url: "/payer-enrollment/references", icon: UserCheck },
     ]
   },
