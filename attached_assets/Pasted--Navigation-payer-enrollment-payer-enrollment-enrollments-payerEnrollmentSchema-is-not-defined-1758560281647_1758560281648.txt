@@ -1,0 +1,43 @@
+✅ Navigation: /payer-enrollment → /payer-enrollment/enrollments
+payerEnrollmentSchema is not defined
+at PayerEnrollmentsPage (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/pages/PayerEnrollmentsPage.tsx:252:31)
+at renderWithHooks (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:11548:26)
+at updateFunctionComponent (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:14582:28)
+at mountLazyComponent (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:14833:23)
+at beginWork (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:15918:22)
+at HTMLUnknownElement.callCallback2 (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:3674:22)
+at Object.invokeGuardedCallbackDev (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:3699:24)
+at invokeGuardedCallback (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:3733:39)
+at beginWork$1 (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:19765:15)
+at performUnitOfWork (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-T2SWDQEL.js?v=0ae28600:19198:20)
+payerEnrollmentSchema is not defined
+The above error occurred in the <PayerEnrollmentsPage> component:
+
+    at PayerEnrollmentsPage (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/pages/PayerEnrollmentsPage.tsx:201:41)
+    at Route (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:206:16)
+    at Switch (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:262:17)
+    at Suspense
+    at main
+    at div
+    at div
+    at div
+    at Provider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=0ae28600:38:15)
+    at TooltipProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=0ae28600:65:5)
+    at https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ui/sidebar.tsx:50:72
+    at Layout (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/Layout.tsx:32:34)
+    at ProtectedRoute (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/ProtectedRoute.tsx:26:42)
+    at Route (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:206:16)
+    at Switch (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:262:17)
+    at Suspense
+    at RouteMonitor (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/components/RouteMonitor.tsx:188:36)
+    at Router (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/wouter.js?v=0ae28600:161:17)
+    at Provider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=0ae28600:38:15)
+    at TooltipProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=0ae28600:65:5)
+    at ThemeProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/contexts/ThemeContext.tsx:35:33)
+    at AuthProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/src/contexts/AuthContext.tsx:38:32)
+    at QueryClientProvider (https://42de13be-a718-408b-a446-b209cedd85f4-00-16ofqpuu24ltx.kirk.replit.dev/node_modules/.vite/deps/@tanstack_react-query.js?v=0ae28600:2934:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+payerEnrollmentSchema is not defined

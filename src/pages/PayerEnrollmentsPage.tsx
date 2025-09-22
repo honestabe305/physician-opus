@@ -155,13 +155,11 @@ export default function PayerEnrollmentsPage() {
   const { toast } = useToast();
 
   // Fetch payer enrollments
-  const { data: enrollments, isLoading, error, refetch } = useQuery<PayerEnrollment[]>({
+  const { data: enrollmentsResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/payer-enrollments'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/payer-enrollments');
-      return response || [];
-    }
   });
+  
+  const enrollments = enrollmentsResponse?.data || [];
 
   // Fetch supporting data for dropdowns
   const { data: physicians } = useQuery<Physician[]>({
@@ -172,13 +170,11 @@ export default function PayerEnrollmentsPage() {
     }
   });
 
-  const { data: payers } = useQuery<Payer[]>({
+  const { data: payersResponse } = useQuery({
     queryKey: ['/api/payers'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/payers');
-      return response || [];
-    }
   });
+  
+  const payers = payersResponse?.data || [];
 
   const { data: practiceLocations } = useQuery<PracticeLocation[]>({
     queryKey: ['/api/practice-locations'],
@@ -190,7 +186,7 @@ export default function PayerEnrollmentsPage() {
 
   // Create form
   const createForm = useForm<PayerEnrollmentFormData>({
-    resolver: zodResolver(payerEnrollmentSchema),
+    resolver: zodResolver(payerEnrollmentFormSchema),
     defaultValues: {
       physicianId: "",
       payerId: "",
