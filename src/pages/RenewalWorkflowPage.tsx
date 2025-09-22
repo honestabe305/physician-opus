@@ -40,7 +40,7 @@ export default function RenewalWorkflowPage() {
     upcomingIn60Days: number;
     upcomingIn90Days: number;
   }>({
-    queryKey: ['/api/renewal/statistics'],
+    queryKey: ['/api/renewals/statistics'],
     retry: 3,
     refetchInterval: 30000, // Refresh every 30 seconds
     onError: (error) => {
@@ -55,7 +55,7 @@ export default function RenewalWorkflowPage() {
 
   // Fetch upcoming renewals
   const { data: upcomingRenewals, isLoading: renewalsLoading, refetch: refetchRenewals, error: renewalsError } = useQuery<SelectRenewalWorkflow[]>({
-    queryKey: ['/api/renewal/upcoming', { days: 90 }],
+    queryKey: ['/api/renewals'],
     retry: 3,
     onError: (error) => {
       console.error('Error fetching upcoming renewals:', error);
@@ -79,7 +79,7 @@ export default function RenewalWorkflowPage() {
     description: string;
     completed: boolean;
   }>>({
-    queryKey: selectedWorkflow ? ['/api/renewal', selectedWorkflow.id, 'timeline'] : null,
+    queryKey: selectedWorkflow ? ['/api/renewals', selectedWorkflow.id, 'timeline'] : null,
     enabled: !!selectedWorkflow
   });
 
@@ -96,14 +96,14 @@ export default function RenewalWorkflowPage() {
     completedItems: number;
     progressPercentage: number;
   }>({
-    queryKey: selectedWorkflow ? ['/api/renewal', selectedWorkflow.id, 'checklist'] : null,
+    queryKey: selectedWorkflow ? ['/api/renewals', selectedWorkflow.id, 'checklist'] : null,
     enabled: !!selectedWorkflow
   });
 
   // Mutation to update workflow status
   const updateStatusMutation = useMutation({
     mutationFn: async (data: { id: string; status: string; rejectionReason?: string }) => {
-      return apiRequest(`/api/renewal/${data.id}/status`, {
+      return apiRequest(`/api/renewals/${data.id}/status`, {
         method: 'PUT',
         body: JSON.stringify({
           status: data.status,
@@ -116,7 +116,7 @@ export default function RenewalWorkflowPage() {
         title: "Status Updated",
         description: "The renewal workflow status has been updated successfully."
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/renewal'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/renewals'] });
       setUpdateStatusDialog(false);
       setNewStatus("");
       setRejectionReason("");
@@ -133,7 +133,7 @@ export default function RenewalWorkflowPage() {
   // Mutation to complete checklist task
   const completeTaskMutation = useMutation({
     mutationFn: async (data: { workflowId: string; taskId: string; completed: boolean }) => {
-      return apiRequest(`/api/renewal/${data.workflowId}/complete-task`, {
+      return apiRequest(`/api/renewals/${data.workflowId}/complete-task`, {
         method: 'POST',
         body: JSON.stringify({
           taskId: data.taskId,
@@ -142,7 +142,7 @@ export default function RenewalWorkflowPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/renewal'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/renewals'] });
     }
   });
 
@@ -167,7 +167,7 @@ export default function RenewalWorkflowPage() {
   const handleRefresh = () => {
     refetchStats();
     refetchRenewals();
-    queryClient.invalidateQueries({ queryKey: ['/api/renewal'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/renewals'] });
     toast({
       title: "Refreshed",
       description: "Data has been refreshed successfully."
@@ -422,7 +422,7 @@ export default function RenewalWorkflowPage() {
                     progressPercentage={checklist.progressPercentage || 0}
                     editable={['not_started', 'in_progress'].includes(selectedWorkflow.renewalStatus)}
                     onTaskComplete={handleTaskComplete}
-                    onRefresh={() => queryClient.invalidateQueries({ queryKey: ['/api/renewal', selectedWorkflow.id] })}
+                    onRefresh={() => queryClient.invalidateQueries({ queryKey: ['/api/renewals', selectedWorkflow.id] })}
                   />
                 )}
               </div>
