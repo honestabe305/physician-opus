@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import path from 'path';
 import { router } from './routes';
+import { NotificationScheduler } from './services/scheduler';
 
 // CRITICAL: Force Autoscale deployment NOW - Express server must run in production
 // Updated: September 17, 2025 - PRODUCTION DEPLOYMENT REQUIRED (Build 002)
@@ -125,11 +126,20 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📋 Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`🔌 API base URL: http://0.0.0.0:${PORT}/api`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Initialize and start the scheduler for background tasks
+  try {
+    const scheduler = new NotificationScheduler();
+    await scheduler.start();
+    console.log('📅 Background scheduler initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to start scheduler:', error);
+  }
 });
 
 export default app;
