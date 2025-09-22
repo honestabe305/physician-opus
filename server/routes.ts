@@ -18,7 +18,6 @@ import {
   insertNotificationSchema,
   insertPayerSchema,
   insertPracticeLocationSchema,
-  insertProviderBankingSchema,
   insertProfessionalReferenceSchema,
   insertPayerEnrollmentSchema,
   type SelectPractice,
@@ -37,7 +36,6 @@ import {
   type SelectNotification,
   type SelectPayer,
   type SelectPracticeLocation,
-  type SelectProviderBanking,
   type SelectProfessionalReference,
   type SelectPayerEnrollment
 } from '../shared/schema';
@@ -113,8 +111,6 @@ import { documentService, type DocumentAuditEntry } from './services/document-se
 import { analyticsService } from './services/analytics-service';
 import { 
   logSecurityAudit, 
-  bankingAuditMiddleware, 
-  createBankingLimiterMiddleware,
   auditMiddleware 
 } from './middleware/audit-logging';
 import {
@@ -156,17 +152,6 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limiter for sensitive banking operations
-const bankingLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 requests per 15 minutes for sensitive banking operations
-  message: 'Too many banking data requests, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Enhanced banking rate limiter with proper middleware
-const bankingLimiterMiddleware = createBankingLimiterMiddleware(bankingLimiter);
 
 // Helper function for error handling
 const asyncHandler = (fn: Function) => (req: any, res: any, next: any) => {
@@ -2964,227 +2949,189 @@ router.delete('/api/practice-locations/:id', authMiddleware, adminMiddleware, as
 }));
 
 // ============================
-// PROVIDER BANKING ROUTES (WITH ENCRYPTION)
+// PRACTICE DOCUMENTS ROUTES (GROUP-LEVEL BANKING DOCUMENTS)
 // ============================
 
-// GET /api/provider-banking - Get all provider banking (redacted by default)
-router.get('/api/provider-banking', authMiddleware, bankingAuditMiddleware('view_banking_list'), asyncHandler(async (req: any, res: any) => {
+// GET /api/practices/:practiceId/documents - Get practice documents with pagination
+router.get('/api/practices/:practiceId/documents', authMiddleware, paginationMiddleware, advancedFilterMiddleware, asyncHandler(async (req: any, res: any) => {
   try {
-    const { physicianId, includeDecrypted, page = '1', limit = '25' } = req.query;
+    const { documentType } = req.query;
+    const pagination = req.pagination;
+    const filters = req.filters || [];
     
-    // Parse pagination parameters
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 25));
-    const offset = (pageNum - 1) * limitNum;
+    // Add practice ID filter
+    filters.push({ field: 'practiceId', value: req.params.practiceId });
     
-    if (physicianId) {
-      if (includeDecrypted === 'true') {
-        // This is a critical path - redirect to dedicated decrypted endpoint
-        return res.status(400).json({ 
-          error: 'Use /api/provider-banking/decrypted endpoint for decrypted access' 
-        });
-      }
-      
-      const bankingData = await storage.getProviderBankingByPhysician(physicianId);
-      res.json({
-        data: bankingData,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: bankingData.length
-        }
-      });
-    } else {
-      const bankingData = await storage.getAllProviderBanking();
-      const paginatedData = bankingData.slice(offset, offset + limitNum);
-      
-      res.json({
-        data: paginatedData,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total: bankingData.length,
-          totalPages: Math.ceil(bankingData.length / limitNum)
-        }
-      });
+    // Add document type filter if specified
+    if (documentType) {
+      filters.push({ field: 'documentType', value: documentType });
     }
+    
+    let result: any;
+    let total: number;
+    
+    result = await storage.getAllPracticeDocumentsPaginated ? 
+      await storage.getAllPracticeDocumentsPaginated(pagination, filters) :
+      await storage.getPracticeDocumentsByPractice(req.params.practiceId);
+    total = await storage.getAllPracticeDocumentsCount ? 
+      await storage.getAllPracticeDocumentsCount(filters) :
+      result.length;
+      
+    const paginatedResponse = createPaginatedResponse(result, total, pagination);
+    
+    // Add caching header for practice documents data  
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+    res.json(paginatedResponse);
   } catch (error) {
-    console.error('Error fetching provider banking:', error);
-    res.status(500).json(sanitizeError(error, true));
+    console.error('Error fetching practice documents:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch practice documents', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
   }
 }));
 
-// GET /api/provider-banking/:id - Get specific provider banking record (redacted)
-router.get('/api/provider-banking/:id', authMiddleware, bankingAuditMiddleware('view_banking_record'), asyncHandler(async (req: any, res: any) => {
+// GET /api/practices/:practiceId/documents/:id - Get specific practice document
+router.get('/api/practices/:practiceId/documents/:id', authMiddleware, auditMiddleware('view_practice_document'), asyncHandler(async (req: any, res: any) => {
   try {
-    const { includeDecrypted } = req.query;
-    
-    if (includeDecrypted === 'true') {
-      // Redirect to dedicated decrypted endpoint
-      return res.status(400).json({ 
-        error: 'Use /api/provider-banking/:id/decrypted endpoint for decrypted access' 
-      });
+    const document = await storage.getPracticeDocument(req.params.id);
+    if (!document) {
+      return res.status(404).json({ error: 'Practice document not found' });
     }
     
-    const bankingData = await storage.getProviderBanking(req.params.id);
-    if (!bankingData) {
-      return res.status(404).json({ error: 'Provider banking record not found' });
+    // Verify document belongs to the specified practice
+    if (document.practiceId !== req.params.practiceId) {
+      return res.status(404).json({ error: 'Practice document not found' });
     }
-    res.json(bankingData);
+    
+    res.json(document);
   } catch (error) {
-    console.error('Error fetching provider banking:', error);
-    res.status(500).json(sanitizeError(error, true));
+    console.error('Error fetching practice document:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch practice document', 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    });
   }
 }));
 
-// GET /api/provider-banking/:id/decrypted - Get decrypted banking record (admin only)
-router.get('/api/provider-banking/:id/decrypted', 
+// POST /api/practices/:practiceId/documents - Create new practice document
+router.post('/api/practices/:practiceId/documents', 
   authMiddleware, 
-  adminMiddleware, 
-  bankingLimiterMiddleware,
-  bankingAuditMiddleware('view_banking_decrypted'),
+  upload.single('file'),
+  auditMiddleware('create_practice_document'),
   asyncHandler(async (req: any, res: any) => {
     try {
-      const bankingData = await storage.getProviderBankingDecryptedById(req.params.id);
-      if (!bankingData) {
-        return res.status(404).json({ error: 'Provider banking record not found' });
+      const { documentType, documentName, notes } = req.body;
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ error: 'File is required' });
       }
       
-      res.json(bankingData);
+      if (!documentType || !documentName) {
+        return res.status(400).json({ error: 'Document type and name are required' });
+      }
+      
+      // Store file using document service
+      const storedFile = await documentService.storeDocument(file, {
+        practiceId: req.params.practiceId,
+        documentType,
+        documentName
+      });
+      
+      // Create document record
+      const documentData = {
+        practiceId: req.params.practiceId,
+        documentType,
+        documentName,
+        fileName: file.originalname,
+        filePath: storedFile.path,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        uploadedBy: (req as any).user?.userId,
+        notes
+      };
+      
+      const document = await storage.createPracticeDocument(documentData);
+      res.status(201).json(document);
     } catch (error) {
-      console.error('Error fetching decrypted provider banking:', error);
-      res.status(500).json(sanitizeError(error, true));
+      console.error('Error creating practice document:', error);
+      res.status(500).json({ 
+        error: 'Failed to create practice document', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   })
 );
 
-// GET /api/provider-banking/physician/:physicianId/decrypted - Get decrypted banking by physician (admin only)
-router.get('/api/provider-banking/physician/:physicianId/decrypted',
-  authMiddleware,
-  adminMiddleware,
-  bankingLimiterMiddleware,
-  bankingAuditMiddleware('view_banking_decrypted_by_physician'),
-  asyncHandler(async (req: any, res: any) => {
-    try {
-      const bankingData = await storage.getProviderBankingDecrypted(req.params.physicianId);
-      res.json(bankingData);
-    } catch (error) {
-      console.error('Error fetching decrypted provider banking by physician:', error);
-      res.status(500).json(sanitizeError(error, true));
-    }
-  })
-);
-
-// POST /api/provider-banking - Create new provider banking record
-router.post('/api/provider-banking', 
+// PATCH /api/practices/:practiceId/documents/:id - Update practice document metadata
+router.patch('/api/practices/:practiceId/documents/:id', 
   authMiddleware, 
-  bankingAuditMiddleware('create_banking'),
+  auditMiddleware('update_practice_document'),
   asyncHandler(async (req: any, res: any) => {
     try {
-      // Validate request body with strict parsing
-      const validatedData = insertProviderBankingSchema.parse(req.body);
-
-      // Validate that physician exists
-      if (validatedData.physicianId) {
-        const physician = await storage.getPhysician(validatedData.physicianId);
-        if (!physician) {
-          return res.status(400).json({ error: 'Physician not found' });
-        }
+      // Check if document exists and belongs to practice
+      const existingDocument = await storage.getPracticeDocument(req.params.id);
+      if (!existingDocument || existingDocument.practiceId !== req.params.practiceId) {
+        return res.status(404).json({ error: 'Practice document not found' });
       }
 
-      // Check for existing banking record for this physician (409 conflict)
-      const existingBanking = await storage.getProviderBankingByPhysician(validatedData.physicianId);
-      if (existingBanking.length > 0) {
-        return res.status(409).json({ 
-          error: 'Banking record already exists for this physician',
-          conflictType: 'duplicate_physician_banking'
-        });
-      }
+      // Allow updating metadata only (not file content)
+      const { documentType, documentName, notes, expirationDate } = req.body;
+      const updates: any = {};
+      
+      if (documentType !== undefined) updates.documentType = documentType;
+      if (documentName !== undefined) updates.documentName = documentName;
+      if (notes !== undefined) updates.notes = notes;
+      if (expirationDate !== undefined) updates.expirationDate = expirationDate;
 
-      const bankingData = await storage.createProviderBanking(validatedData);
-      res.status(201).json(bankingData);
+      const updatedDocument = await storage.updatePracticeDocument(req.params.id, updates);
+      res.json(updatedDocument);
     } catch (error) {
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ 
-          error: 'Invalid provider banking data', 
-          details: (error as any).errors 
-        });
-      }
-      console.error('Error creating provider banking:', error);
-      res.status(500).json(sanitizeError(error, true));
+      console.error('Error updating practice document:', error);
+      res.status(500).json({ 
+        error: 'Failed to update practice document', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   })
 );
 
-// PUT /api/provider-banking/:id - Update provider banking record
-router.put('/api/provider-banking/:id', 
-  authMiddleware, 
-  bankingAuditMiddleware('update_banking'),
-  asyncHandler(async (req: any, res: any) => {
-    try {
-      // Check if banking record exists
-      const existingBanking = await storage.getProviderBanking(req.params.id);
-      if (!existingBanking) {
-        return res.status(404).json({ error: 'Provider banking record not found' });
-      }
-
-      // Validate request body with strict parsing
-      const validatedData = insertProviderBankingSchema.partial().parse(req.body);
-
-      // Validate that physician exists if being updated
-      if (validatedData.physicianId) {
-        const physician = await storage.getPhysician(validatedData.physicianId);
-        if (!physician) {
-          return res.status(400).json({ error: 'Physician not found' });
-        }
-        
-        // Check for conflicts if changing physician
-        if (validatedData.physicianId !== existingBanking.physicianId) {
-          const existingForNewPhysician = await storage.getProviderBankingByPhysician(validatedData.physicianId);
-          if (existingForNewPhysician.length > 0) {
-            return res.status(409).json({ 
-              error: 'Banking record already exists for the target physician',
-              conflictType: 'duplicate_physician_banking'
-            });
-          }
-        }
-      }
-
-      const bankingData = await storage.updateProviderBanking(req.params.id, validatedData);
-      res.json(bankingData);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ 
-          error: 'Invalid provider banking data', 
-          details: (error as any).errors 
-        });
-      }
-      console.error('Error updating provider banking:', error);
-      res.status(500).json(sanitizeError(error, true));
-    }
-  })
-);
-
-// DELETE /api/provider-banking/:id - Delete provider banking record (admin only)
-router.delete('/api/provider-banking/:id', 
+// DELETE /api/practices/:practiceId/documents/:id - Delete practice document
+router.delete('/api/practices/:practiceId/documents/:id', 
   authMiddleware, 
   adminMiddleware,
-  bankingAuditMiddleware('delete_banking'),
+  auditMiddleware('delete_practice_document'),
   asyncHandler(async (req: any, res: any) => {
     try {
-      const bankingData = await storage.getProviderBanking(req.params.id);
-      if (!bankingData) {
-        return res.status(404).json({ error: 'Provider banking record not found' });
+      // Check if document exists and belongs to practice
+      const document = await storage.getPracticeDocument(req.params.id);
+      if (!document || document.practiceId !== req.params.practiceId) {
+        return res.status(404).json({ error: 'Practice document not found' });
       }
 
-      await storage.deleteProviderBanking(req.params.id);
+      // Delete the file from storage if it exists
+      if (document.filePath) {
+        try {
+          await documentService.deleteDocument(document.filePath);
+        } catch (fileError) {
+          console.warn('Failed to delete file from storage:', fileError);
+          // Continue with database deletion even if file deletion fails
+        }
+      }
+
+      await storage.deletePracticeDocument(req.params.id);
       res.status(204).send();
     } catch (error) {
-      console.error('Error deleting provider banking:', error);
-      res.status(500).json(sanitizeError(error, true));
+      console.error('Error deleting practice document:', error);
+      res.status(500).json({ 
+        error: 'Failed to delete practice document', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   })
 );
+
 
 // ============================
 // PROFESSIONAL REFERENCES ROUTES
