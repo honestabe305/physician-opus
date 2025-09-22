@@ -68,9 +68,11 @@ export default function PayersPage() {
   const { toast } = useToast();
 
   // Fetch payers
-  const { data: payers, isLoading, error, refetch } = useQuery<Payer[]>({
+  const { data: payersResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api', 'payers'],
   });
+  
+  const payers = payersResponse?.data || [];
 
   // Create form
   const createForm = useForm<PayerFormData>({

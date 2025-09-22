@@ -106,18 +106,18 @@ export default function ProviderBankingPage() {
   const isAdmin = user?.role === 'admin';
 
   // Fetch provider banking records (redacted by default)
-  const { data: bankingRecords, isLoading, error, refetch } = useQuery<ProviderBanking[]>({
+  const { data: bankingResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api', 'provider-banking'],
   });
+  
+  const bankingRecords = bankingResponse?.data || [];
 
   // Fetch physicians for dropdown
-  const { data: physicians } = useQuery<Physician[]>({
+  const { data: physiciansResponse } = useQuery({
     queryKey: ['/api/physicians'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/physicians');
-      return response || [];
-    }
   });
+  
+  const physicians = physiciansResponse?.data || [];
 
   // Fetch audit trail
   const { data: auditTrail } = useQuery<AuditEntry[]>({

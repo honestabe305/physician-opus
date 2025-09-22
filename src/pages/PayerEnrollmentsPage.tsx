@@ -162,13 +162,11 @@ export default function PayerEnrollmentsPage() {
   const enrollments = enrollmentsResponse?.data || [];
 
   // Fetch supporting data for dropdowns
-  const { data: physicians } = useQuery<Physician[]>({
+  const { data: physiciansResponse } = useQuery({
     queryKey: ['/api/physicians'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/physicians');
-      return response || [];
-    }
   });
+  
+  const physicians = physiciansResponse?.data || [];
 
   const { data: payersResponse } = useQuery({
     queryKey: ['/api/payers'],
@@ -176,13 +174,11 @@ export default function PayerEnrollmentsPage() {
   
   const payers = payersResponse?.data || [];
 
-  const { data: practiceLocations } = useQuery<PracticeLocation[]>({
+  const { data: practiceLocationsResponse } = useQuery({
     queryKey: ['/api/practice-locations'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/practice-locations');
-      return response || [];
-    }
   });
+  
+  const practiceLocations = practiceLocationsResponse?.data || [];
 
   // Create form
   const createForm = useForm<PayerEnrollmentFormData>({

@@ -174,22 +174,18 @@ export default function PracticeLocationsPage() {
   const { toast } = useToast();
 
   // Fetch practice locations
-  const { data: locations, isLoading, error, refetch } = useQuery<PracticeLocation[]>({
+  const { data: locationsResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/practice-locations'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/practice-locations');
-      return response || [];
-    }
   });
+  
+  const locations = locationsResponse?.data || [];
 
   // Fetch practices for dropdown
-  const { data: practices } = useQuery<Practice[]>({
+  const { data: practicesResponse } = useQuery({
     queryKey: ['/api/practices'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/practices');
-      return response || [];
-    }
   });
+  
+  const practices = practicesResponse?.data || [];
 
   // Create form
   const createForm = useForm<PracticeLocationFormData>({

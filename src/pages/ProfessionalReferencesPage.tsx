@@ -130,22 +130,18 @@ export default function ProfessionalReferencesPage() {
   const { toast } = useToast();
 
   // Fetch professional references
-  const { data: references, isLoading, error, refetch } = useQuery<ProfessionalReference[]>({
+  const { data: referencesResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/professional-references'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/professional-references');
-      return response || [];
-    }
   });
+  
+  const references = referencesResponse?.data || [];
 
   // Fetch physicians for dropdown
-  const { data: physicians } = useQuery<Physician[]>({
+  const { data: physiciansResponse } = useQuery({
     queryKey: ['/api/physicians'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/physicians');
-      return response || [];
-    }
   });
+  
+  const physicians = physiciansResponse?.data || [];
 
   // Create form
   const createForm = useForm<ProfessionalReferenceFormData>({
