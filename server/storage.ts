@@ -19,6 +19,11 @@ import {
   licenseDocuments,
   notifications,
   renewalWorkflows,
+  payers,
+  practiceLocations,
+  providerBanking,
+  professionalReferences,
+  payerEnrollments,
   type SelectUser,
   type InsertUser,
   type SelectSession,
@@ -57,6 +62,16 @@ import {
   type InsertNotification,
   type SelectRenewalWorkflow,
   type InsertRenewalWorkflow,
+  type SelectPayer,
+  type InsertPayer,
+  type SelectPracticeLocation,
+  type InsertPracticeLocation,
+  type SelectProviderBanking,
+  type InsertProviderBanking,
+  type SelectProfessionalReference,
+  type InsertProfessionalReference,
+  type SelectPayerEnrollment,
+  type InsertPayerEnrollment,
 } from '../shared/schema';
 import { MemoryStorage } from './memoryStorage';
 
@@ -260,6 +275,50 @@ export interface IStorage {
   updateRenewalProgress(id: string, progress: number, checklist?: any): Promise<SelectRenewalWorkflow>;
   deleteRenewalWorkflow(id: string): Promise<void>;
 
+  // Payer operations
+  createPayer(payer: InsertPayer): Promise<SelectPayer>;
+  getPayer(id: string): Promise<SelectPayer | null>;
+  getPayerByName(name: string): Promise<SelectPayer | null>;
+  updatePayer(id: string, updates: Partial<InsertPayer>): Promise<SelectPayer>;
+  deletePayer(id: string): Promise<void>;
+  getAllPayers(): Promise<SelectPayer[]>;
+  searchPayers(query: string): Promise<SelectPayer[]>;
+
+  // Practice Location operations  
+  createPracticeLocation(location: InsertPracticeLocation): Promise<SelectPracticeLocation>;
+  getPracticeLocation(id: string): Promise<SelectPracticeLocation | null>;
+  getPracticeLocationsByPractice(practiceId: string): Promise<SelectPracticeLocation[]>;
+  updatePracticeLocation(id: string, updates: Partial<InsertPracticeLocation>): Promise<SelectPracticeLocation>;
+  deletePracticeLocation(id: string): Promise<void>;
+  getAllPracticeLocations(): Promise<SelectPracticeLocation[]>;
+
+  // Provider Banking operations
+  createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking>;
+  getProviderBanking(id: string): Promise<SelectProviderBanking | null>;
+  getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null>;
+  updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking>;
+  deleteProviderBanking(id: string): Promise<void>;
+
+  // Professional Reference operations
+  createProfessionalReference(reference: InsertProfessionalReference): Promise<SelectProfessionalReference>;
+  getProfessionalReference(id: string): Promise<SelectProfessionalReference | null>;
+  getProfessionalReferencesByPhysician(physicianId: string): Promise<SelectProfessionalReference[]>;
+  updateProfessionalReference(id: string, updates: Partial<InsertProfessionalReference>): Promise<SelectProfessionalReference>;
+  deleteProfessionalReference(id: string): Promise<void>;
+
+  // Payer Enrollment operations
+  createPayerEnrollment(enrollment: InsertPayerEnrollment): Promise<SelectPayerEnrollment>;
+  getPayerEnrollment(id: string): Promise<SelectPayerEnrollment | null>;
+  getPayerEnrollmentsByPhysician(physicianId: string): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByPayer(payerId: string): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByLocation(locationId: string): Promise<SelectPayerEnrollment[]>;
+  getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]>;
+  getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]>;
+  updatePayerEnrollment(id: string, updates: Partial<InsertPayerEnrollment>): Promise<SelectPayerEnrollment>;
+  updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment>;
+  updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment>;
+  deletePayerEnrollment(id: string): Promise<void>;
+
   // Utility operations
   getPhysicianFullProfile(physicianId: string): Promise<{
     physician: SelectPhysician | null;
@@ -273,6 +332,9 @@ export interface IStorage {
     deaRegistrations: SelectDeaRegistration[];
     csrLicenses: SelectCsrLicense[];
     licenseDocuments: SelectLicenseDocument[];
+    providerBanking: SelectProviderBanking | null;
+    professionalReferences: SelectProfessionalReference[];
+    payerEnrollments: SelectPayerEnrollment[];
   }>;
 }
 
@@ -1869,6 +1931,137 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  // Notification operations
+  async createNotification(notification: InsertNotification): Promise<SelectNotification> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(notifications).values(notification).returning();
+      if (!result) {
+        throw new Error('Failed to create notification');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      throw new Error(`Failed to create notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getNotification(id: string): Promise<SelectNotification | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(notifications).where(eq(notifications.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting notification:', error);
+      throw new Error(`Failed to get notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getNotificationsByPhysician(physicianId: string): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(notifications).where(eq(notifications.physicianId, physicianId))
+        .orderBy(notifications.scheduledDate);
+    } catch (error) {
+      console.error('Error getting notifications by physician:', error);
+      throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getUpcomingNotifications(days: number = 30): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + days);
+      
+      return await db.select().from(notifications)
+        .where(
+          and(
+            lt(notifications.scheduledDate, futureDate.toISOString()),
+            eq(notifications.sent, false)
+          )
+        )
+        .orderBy(notifications.scheduledDate);
+    } catch (error) {
+      console.error('Error getting upcoming notifications:', error);
+      throw new Error(`Failed to get upcoming notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllNotifications(): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(notifications).orderBy(notifications.scheduledDate);
+    } catch (error) {
+      console.error('Error getting all notifications:', error);
+      throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(notifications)
+        .where(eq(notifications.type, type))
+        .orderBy(notifications.scheduledDate);
+    } catch (error) {
+      console.error('Error getting notifications by type:', error);
+      throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async markNotificationSent(id: string): Promise<SelectNotification> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(notifications)
+        .set({ 
+          sent: true,
+          sentDate: new Date(),
+          updatedAt: new Date() 
+        })
+        .where(eq(notifications.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Notification not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error marking notification sent:', error);
+      throw new Error(`Failed to mark notification sent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateNotification(id: string, updates: Partial<InsertNotification>): Promise<SelectNotification> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(notifications)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(notifications.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Notification not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating notification:', error);
+      throw new Error(`Failed to update notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(notifications).where(eq(notifications.id, id));
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      throw new Error(`Failed to delete notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Renewal Workflow operations
   async createRenewalWorkflow(workflow: InsertRenewalWorkflow): Promise<SelectRenewalWorkflow> {
     try {
@@ -2054,6 +2247,473 @@ export class PostgreSQLStorage implements IStorage {
     }
   }
 
+  // Payer operations
+  async createPayer(payer: InsertPayer): Promise<SelectPayer> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(payers).values(payer).returning();
+      if (!result) {
+        throw new Error('Failed to create payer');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating payer:', error);
+      throw new Error(`Failed to create payer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayer(id: string): Promise<SelectPayer | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(payers).where(eq(payers.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting payer:', error);
+      throw new Error(`Failed to get payer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerByName(name: string): Promise<SelectPayer | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(payers).where(eq(payers.name, name));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting payer by name:', error);
+      throw new Error(`Failed to get payer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updatePayer(id: string, updates: Partial<InsertPayer>): Promise<SelectPayer> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(payers)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(payers.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Payer not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating payer:', error);
+      throw new Error(`Failed to update payer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deletePayer(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(payers).where(eq(payers.id, id));
+    } catch (error) {
+      console.error('Error deleting payer:', error);
+      throw new Error(`Failed to delete payer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPayers(): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payers).where(eq(payers.isActive, true));
+    } catch (error) {
+      console.error('Error getting all payers:', error);
+      throw new Error(`Failed to get payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async searchPayers(query: string): Promise<SelectPayer[]> {
+    try {
+      const db = await this.getDb();
+      return await db
+        .select()
+        .from(payers)
+        .where(
+          and(
+            eq(payers.isActive, true),
+            ilike(payers.name, `%${query}%`)
+          )
+        );
+    } catch (error) {
+      console.error('Error searching payers:', error);
+      throw new Error(`Failed to search payers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Practice Location operations
+  async createPracticeLocation(location: InsertPracticeLocation): Promise<SelectPracticeLocation> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(practiceLocations).values(location).returning();
+      if (!result) {
+        throw new Error('Failed to create practice location');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating practice location:', error);
+      throw new Error(`Failed to create practice location: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeLocation(id: string): Promise<SelectPracticeLocation | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(practiceLocations).where(eq(practiceLocations.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting practice location:', error);
+      throw new Error(`Failed to get practice location: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPracticeLocationsByPractice(practiceId: string): Promise<SelectPracticeLocation[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practiceLocations).where(
+        and(
+          eq(practiceLocations.practiceId, practiceId),
+          eq(practiceLocations.isActive, true)
+        )
+      );
+    } catch (error) {
+      console.error('Error getting practice locations by practice:', error);
+      throw new Error(`Failed to get practice locations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updatePracticeLocation(id: string, updates: Partial<InsertPracticeLocation>): Promise<SelectPracticeLocation> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(practiceLocations)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(practiceLocations.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Practice location not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating practice location:', error);
+      throw new Error(`Failed to update practice location: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deletePracticeLocation(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(practiceLocations).where(eq(practiceLocations.id, id));
+    } catch (error) {
+      console.error('Error deleting practice location:', error);
+      throw new Error(`Failed to delete practice location: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getAllPracticeLocations(): Promise<SelectPracticeLocation[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(practiceLocations).where(eq(practiceLocations.isActive, true));
+    } catch (error) {
+      console.error('Error getting all practice locations:', error);
+      throw new Error(`Failed to get practice locations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Provider Banking operations
+  async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(providerBanking).values(banking).returning();
+      if (!result) {
+        throw new Error('Failed to create provider banking');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating provider banking:', error);
+      throw new Error(`Failed to create provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(providerBanking).where(eq(providerBanking.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting provider banking:', error);
+      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(providerBanking).where(
+        and(
+          eq(providerBanking.physicianId, physicianId),
+          eq(providerBanking.isActive, true)
+        )
+      );
+      return result || null;
+    } catch (error) {
+      console.error('Error getting provider banking by physician:', error);
+      throw new Error(`Failed to get provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(providerBanking)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(providerBanking.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Provider banking not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating provider banking:', error);
+      throw new Error(`Failed to update provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteProviderBanking(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(providerBanking).where(eq(providerBanking.id, id));
+    } catch (error) {
+      console.error('Error deleting provider banking:', error);
+      throw new Error(`Failed to delete provider banking: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Professional Reference operations
+  async createProfessionalReference(reference: InsertProfessionalReference): Promise<SelectProfessionalReference> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(professionalReferences).values(reference).returning();
+      if (!result) {
+        throw new Error('Failed to create professional reference');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating professional reference:', error);
+      throw new Error(`Failed to create professional reference: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getProfessionalReference(id: string): Promise<SelectProfessionalReference | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(professionalReferences).where(eq(professionalReferences.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting professional reference:', error);
+      throw new Error(`Failed to get professional reference: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getProfessionalReferencesByPhysician(physicianId: string): Promise<SelectProfessionalReference[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(professionalReferences).where(eq(professionalReferences.physicianId, physicianId));
+    } catch (error) {
+      console.error('Error getting professional references by physician:', error);
+      throw new Error(`Failed to get professional references: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateProfessionalReference(id: string, updates: Partial<InsertProfessionalReference>): Promise<SelectProfessionalReference> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(professionalReferences)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(professionalReferences.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Professional reference not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating professional reference:', error);
+      throw new Error(`Failed to update professional reference: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteProfessionalReference(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(professionalReferences).where(eq(professionalReferences.id, id));
+    } catch (error) {
+      console.error('Error deleting professional reference:', error);
+      throw new Error(`Failed to delete professional reference: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Payer Enrollment operations
+  async createPayerEnrollment(enrollment: InsertPayerEnrollment): Promise<SelectPayerEnrollment> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.insert(payerEnrollments).values(enrollment).returning();
+      if (!result) {
+        throw new Error('Failed to create payer enrollment');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating payer enrollment:', error);
+      throw new Error(`Failed to create payer enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollment(id: string): Promise<SelectPayerEnrollment | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db.select().from(payerEnrollments).where(eq(payerEnrollments.id, id));
+      return result || null;
+    } catch (error) {
+      console.error('Error getting payer enrollment:', error);
+      throw new Error(`Failed to get payer enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPhysician(physicianId: string): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.physicianId, physicianId));
+    } catch (error) {
+      console.error('Error getting payer enrollments by physician:', error);
+      throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByPayer(payerId: string): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.payerId, payerId));
+    } catch (error) {
+      console.error('Error getting payer enrollments by payer:', error);
+      throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByLocation(locationId: string): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.practiceLocationId, locationId));
+    } catch (error) {
+      console.error('Error getting payer enrollments by location:', error);
+      throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status));
+    } catch (error) {
+      console.error('Error getting payer enrollments by status:', error);
+      throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]> {
+    try {
+      const db = await this.getDb();
+      return await db
+        .select()
+        .from(payerEnrollments)
+        .where(
+          and(
+            sql`${payerEnrollments.revalidationDate} <= CURRENT_DATE + INTERVAL '${days} days'`,
+            sql`${payerEnrollments.revalidationDate} IS NOT NULL`
+          )
+        );
+    } catch (error) {
+      console.error('Error getting expiring enrollments:', error);
+      throw new Error(`Failed to get expiring enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updatePayerEnrollment(id: string, updates: Partial<InsertPayerEnrollment>): Promise<SelectPayerEnrollment> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(payerEnrollments)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(payerEnrollments.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Payer enrollment not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating payer enrollment:', error);
+      throw new Error(`Failed to update payer enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(payerEnrollments)
+        .set({ 
+          enrollmentStatus: status as any,
+          updatedAt: new Date() 
+        })
+        .where(eq(payerEnrollments.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Payer enrollment not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating enrollment status:', error);
+      throw new Error(`Failed to update enrollment status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(payerEnrollments)
+        .set({ 
+          progressPercentage: progress,
+          updatedAt: new Date() 
+        })
+        .where(eq(payerEnrollments.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Payer enrollment not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating enrollment progress:', error);
+      throw new Error(`Failed to update enrollment progress: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deletePayerEnrollment(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(payerEnrollments).where(eq(payerEnrollments.id, id));
+    } catch (error) {
+      console.error('Error deleting payer enrollment:', error);
+      throw new Error(`Failed to delete payer enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Utility operations
   async getPhysicianFullProfile(physicianId: string): Promise<{
     physician: SelectPhysician | null;
@@ -2080,7 +2740,10 @@ export class PostgreSQLStorage implements IStorage {
         documents,
         deaRegistrations,
         csrLicenses,
-        licenseDocuments
+        licenseDocuments,
+        providerBanking,
+        professionalReferences,
+        payerEnrollments
       ] = await Promise.all([
         this.getPhysician(physicianId),
         this.getPhysicianLicenses(physicianId),
@@ -2092,7 +2755,10 @@ export class PostgreSQLStorage implements IStorage {
         this.getPhysicianDocuments(physicianId),
         this.getDeaRegistrationsByPhysician(physicianId),
         this.getCsrLicensesByPhysician(physicianId),
-        this.getLicenseDocumentsByPhysician(physicianId)
+        this.getLicenseDocumentsByPhysician(physicianId),
+        this.getProviderBankingByPhysician(physicianId),
+        this.getProfessionalReferencesByPhysician(physicianId),
+        this.getPayerEnrollmentsByPhysician(physicianId)
       ]);
 
       return {
@@ -2106,7 +2772,10 @@ export class PostgreSQLStorage implements IStorage {
         documents,
         deaRegistrations,
         csrLicenses,
-        licenseDocuments
+        licenseDocuments,
+        providerBanking,
+        professionalReferences,
+        payerEnrollments
       };
     } catch (error) {
       console.error('Error getting physician full profile:', error);
