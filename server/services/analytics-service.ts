@@ -604,6 +604,123 @@ export class AnalyticsService {
       complianceRate: (compliant / deptPhysicians.length) * 100,
     };
   }
+
+  // Get physician status summary
+  async getPhysicianStatusSummary(): Promise<{
+    total: number;
+    statusBreakdown: Record<string, number>;
+  }> {
+    const physicians = await this.storage.getAllPhysicians();
+    
+    const statusBreakdown: Record<string, number> = {
+      active: 0,
+      inactive: 0,
+      pending: 0,
+      suspended: 0
+    };
+    
+    physicians.forEach(physician => {
+      const status = physician.status || 'pending';
+      statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
+    });
+    
+    return {
+      total: physicians.length,
+      statusBreakdown
+    };
+  }
+
+  // Get license expiration report
+  async getLicenseExpirationReport(days: number): Promise<{
+    expiringWithinDays: number;
+    alreadyExpired: number;
+    licenses: any[];
+    reportGeneratedAt: string;
+  }> {
+    const today = new Date();
+    const futureDate = addDays(today, days);
+    
+    const physicians = await this.storage.getAllPhysicians();
+    const allLicenses: any[] = [];
+    let expiringCount = 0;
+    let expiredCount = 0;
+    
+    for (const physician of physicians) {
+      const licenses = await this.storage.getPhysicianLicenses(physician.id);
+      
+      for (const license of licenses) {
+        if (license.expirationDate) {
+          const expDate = new Date(license.expirationDate);
+          const daysUntilExpiration = differenceInDays(expDate, today);
+          
+          if (daysUntilExpiration < 0) {
+            expiredCount++;
+          } else if (daysUntilExpiration <= days) {
+            expiringCount++;
+            allLicenses.push({
+              ...license,
+              physicianId: physician.id,
+              physicianName: `${physician.firstName} ${physician.lastName}`,
+              daysUntilExpiration
+            });
+          }
+        }
+      }
+    }
+    
+    return {
+      expiringWithinDays: expiringCount,
+      alreadyExpired: expiredCount,
+      licenses: allLicenses.sort((a, b) => a.daysUntilExpiration - b.daysUntilExpiration),
+      reportGeneratedAt: new Date().toISOString()
+    };
+  }
+
+  // Get certification expiration report
+  async getCertificationExpirationReport(days: number): Promise<{
+    expiringWithinDays: number;
+    alreadyExpired: number;
+    certifications: any[];
+    reportGeneratedAt: string;
+  }> {
+    const today = new Date();
+    const futureDate = addDays(today, days);
+    
+    const physicians = await this.storage.getAllPhysicians();
+    const allCertifications: any[] = [];
+    let expiringCount = 0;
+    let expiredCount = 0;
+    
+    for (const physician of physicians) {
+      const certifications = await this.storage.getPhysicianCertifications(physician.id);
+      
+      for (const certification of certifications) {
+        if (certification.expirationDate) {
+          const expDate = new Date(certification.expirationDate);
+          const daysUntilExpiration = differenceInDays(expDate, today);
+          
+          if (daysUntilExpiration < 0) {
+            expiredCount++;
+          } else if (daysUntilExpiration <= days) {
+            expiringCount++;
+            allCertifications.push({
+              ...certification,
+              physicianId: physician.id,
+              physicianName: `${physician.firstName} ${physician.lastName}`,
+              daysUntilExpiration
+            });
+          }
+        }
+      }
+    }
+    
+    return {
+      expiringWithinDays: expiringCount,
+      alreadyExpired: expiredCount,
+      certifications: allCertifications.sort((a, b) => a.daysUntilExpiration - b.daysUntilExpiration),
+      reportGeneratedAt: new Date().toISOString()
+    };
+  }
 }
 
 // Export singleton instance

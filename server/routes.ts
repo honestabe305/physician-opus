@@ -2172,6 +2172,135 @@ router.delete('/renewal/:id', authMiddleware, adminMiddleware, asyncHandler(asyn
   }
 }));
 
+// ============================
+// ANALYTICS ROUTES
+// ============================
+
+// GET /api/analytics/physicians/status-summary - Get physician status summary (no auth for dashboard)
+router.get('/analytics/physicians/status-summary', asyncHandler(async (req: any, res: any) => {
+  try {
+    const statusSummary = await analyticsService.getPhysicianStatusSummary();
+    res.json(statusSummary);
+  } catch (error: any) {
+    console.error('Error fetching physician status summary:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/licenses/expiration-report - Get license expiration report (no auth for dashboard)
+router.get('/analytics/licenses/expiration-report', asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.query.days as string) || 30;
+  
+  try {
+    const report = await analyticsService.getLicenseExpirationReport(days);
+    res.json(report);
+  } catch (error: any) {
+    console.error('Error fetching license expiration report:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/certifications/expiration-report - Get certification expiration report (no auth for dashboard)
+router.get('/analytics/certifications/expiration-report', asyncHandler(async (req: any, res: any) => {
+  const days = parseInt(req.query.days as string) || 30;
+  
+  try {
+    const report = await analyticsService.getCertificationExpirationReport(days);
+    res.json(report);
+  } catch (error: any) {
+    console.error('Error fetching certification expiration report:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/compliance - Get compliance rates
+router.get('/api/analytics/compliance', asyncHandler(async (req: any, res: any) => {
+  try {
+    const complianceData = await analyticsService.getComplianceRates();
+    res.json(complianceData.byDepartment);
+  } catch (error: any) {
+    console.error('Error fetching compliance data:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/renewal-trends - Get renewal trends
+router.get('/api/analytics/renewal-trends', asyncHandler(async (req: any, res: any) => {
+  try {
+    const renewalTrends = await analyticsService.getRenewalTrends();
+    res.json(renewalTrends);
+  } catch (error: any) {
+    console.error('Error fetching renewal trends:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/expiration-forecast - Get expiration forecast
+router.get('/api/analytics/expiration-forecast', asyncHandler(async (req: any, res: any) => {
+  try {
+    const forecast = await analyticsService.getExpirationForecast();
+    res.json(forecast);
+  } catch (error: any) {
+    console.error('Error fetching expiration forecast:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/provider-metrics - Get provider metrics
+router.get('/api/analytics/provider-metrics', asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getProviderMetrics();
+    res.json(metrics);
+  } catch (error: any) {
+    console.error('Error fetching provider metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/license-distribution - Get license distribution
+router.get('/api/analytics/license-distribution', asyncHandler(async (req: any, res: any) => {
+  try {
+    const distribution = await analyticsService.getLicenseDistribution();
+    res.json(distribution);
+  } catch (error: any) {
+    console.error('Error fetching license distribution:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/dea-metrics - Get DEA metrics
+router.get('/api/analytics/dea-metrics', asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getDEAMetrics();
+    res.json(metrics);
+  } catch (error: any) {
+    console.error('Error fetching DEA metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/csr-metrics - Get CSR metrics
+router.get('/api/analytics/csr-metrics', asyncHandler(async (req: any, res: any) => {
+  try {
+    const metrics = await analyticsService.getCSRMetrics();
+    res.json(metrics);
+  } catch (error: any) {
+    console.error('Error fetching CSR metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
+// GET /api/analytics/compliance-report - Get comprehensive compliance report
+router.get('/api/analytics/compliance-report', asyncHandler(async (req: any, res: any) => {
+  try {
+    const report = await analyticsService.generateComplianceReport();
+    res.json(report);
+  } catch (error: any) {
+    console.error('Error generating compliance report:', error);
+    res.status(500).json({ error: error.message });
+  }
+}));
+
 // System Information route
 router.get('/system/info', asyncHandler(async (req: any, res: any) => {
   const physicians = await storage.getAllPhysicians();
