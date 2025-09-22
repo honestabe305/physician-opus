@@ -112,14 +112,14 @@ export default function DemographicsPage() {
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
           age--;
         }
-        
+
         if (age < 30) ageGroups['< 30']++;
         else if (age < 40) ageGroups['30-39']++;
         else if (age < 50) ageGroups['40-49']++;
         else if (age < 60) ageGroups['50-59']++;
         else if (age < 70) ageGroups['60-69']++;
         else ageGroups['70+']++;
-        
+
         totalAge += age;
         ageCount++;
       }
@@ -271,7 +271,7 @@ export default function DemographicsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground" data-testid={`value-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                {isLoadingPhysicians || isLoadingStatus ? <Skeleton className="h-8 w-16" /> : stat.value}
+                {isLoadingPhysicians ? <Skeleton className="h-8 w-16" /> : stat.value}
               </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span>{stat.change}</span>
@@ -291,7 +291,15 @@ export default function DemographicsPage() {
               <PieChart className="h-5 w-5 text-primary" />
               Gender Distribution
             </CardTitle>
-            <CardDescription>Breakdown by gender category</CardDescription>
+            <CardDescription asChild>
+              <div>
+                {isLoadingPhysicians ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  "Breakdown by gender category"
+                )}
+              </div>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingPhysicians ? (
@@ -333,7 +341,15 @@ export default function DemographicsPage() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Age Distribution
             </CardTitle>
-            <CardDescription>Physicians grouped by age range</CardDescription>
+            <CardDescription asChild>
+              <div>
+                {isLoadingPhysicians ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  "Physicians grouped by age range"
+                )}
+              </div>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingPhysicians ? (
@@ -365,12 +381,14 @@ export default function DemographicsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Physician Demographics</CardTitle>
-              <CardDescription>
-                {isLoadingPhysicians ? (
-                  <Skeleton className="h-4 w-32" />
-                ) : (
-                  `${filteredPhysicians.length} physician${filteredPhysicians.length !== 1 ? 's' : ''} ${searchTerm || genderFilter !== 'all' || statusFilter !== 'all' ? 'filtered' : 'total'}`
-                )}
+              <CardDescription asChild>
+                <div>
+                  {isLoadingPhysicians ? (
+                    <Skeleton className="h-4 w-32" />
+                  ) : (
+                    `${filteredPhysicians.length} physician${filteredPhysicians.length !== 1 ? 's' : ''} ${searchTerm || genderFilter !== 'all' || statusFilter !== 'all' ? 'filtered' : 'total'}`
+                  )}
+                </div>
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
