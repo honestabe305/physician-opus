@@ -520,6 +520,109 @@ export class RenewalService {
     
     return stats;
   }
+
+  /**
+   * Automatically create renewal workflows for licenses expiring within specified days
+   */
+  async createAutomaticRenewalWorkflows(daysAhead: number = 90): Promise<{
+    created: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    console.log(`🔍 Scanning for licenses expiring within ${daysAhead} days...`);
+    
+    const results = {
+      created: 0,
+      skipped: 0,
+      errors: [] as string[]
+    };
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() + daysAhead);
+    const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+    try {
+      // Get all physicians to process their licenses
+      const physicians = await this.storage.getAllPhysicians();
+      
+      for (const physician of physicians) {
+        try {
+          // Check physician licenses
+          const physicianLicenses = await this.storage.getPhysicianLicenses(physician.id);
+          for (const license of physicianLicenses) {
+            if (license.expirationDate && license.expirationDate <= cutoffDateStr) {
+              await this.createWorkflowIfNeeded(physician.id, 'license', license.id, results);
+            }
+          }
+
+          // Check DEA registrations
+          const deaRegistrations = await this.storage.getDeaRegistrationsByPhysician(physician.id);
+          for (const dea of deaRegistrations) {
+            if (dea.expireDate && dea.expireDate <= cutoffDateStr) {
+              await this.createWorkflowIfNeeded(physician.id, 'dea', dea.id, results);
+            }
+          }
+
+          // Check CSR licenses
+          const csrLicenses = await this.storage.getCsrLicensesByPhysician(physician.id);
+          for (const csr of csrLicenses) {
+            if (csr.expireDate && csr.expireDate <= cutoffDateStr) {
+              await this.createWorkflowIfNeeded(physician.id, 'csr', csr.id, results);
+            }
+          }
+        } catch (error) {
+          const errorMsg = `Error processing physician ${physician.fullLegalName} (${physician.id}): ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('❌', errorMsg);
+          results.errors.push(errorMsg);
+        }
+      }
+
+      console.log(`✅ Automatic workflow creation completed: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+      return results;
+    } catch (error) {
+      const errorMsg = `Fatal error in automatic workflow creation: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥', errorMsg);
+      results.errors.push(errorMsg);
+      return results;
+    }
+  }
+
+  /**
+   * Helper method to create workflow if one doesn't already exist
+   */
+  private async createWorkflowIfNeeded(
+    physicianId: string, 
+    entityType: 'license' | 'dea' | 'csr', 
+    entityId: string,
+    results: { created: number; skipped: number; errors: string[] }
+  ): Promise<void> {
+    try {
+      // Check if an active workflow already exists for this entity
+      const existingWorkflows = await this.storage.getRenewalWorkflowsByEntity(entityType, entityId);
+      const activeWorkflow = existingWorkflows.find(w => 
+        !['approved', 'rejected', 'expired'].includes(w.renewalStatus)
+      );
+
+      if (activeWorkflow) {
+        results.skipped++;
+        return;
+      }
+
+      // Create new renewal workflow
+      await this.initiateRenewal(physicianId, entityType, entityId, 'system');
+      results.created++;
+      
+      console.log(`📋 Created renewal workflow for ${entityType} ${entityId} (physician: ${physicianId})`);
+    } catch (error) {
+      // If the error is about an existing workflow, count as skipped instead of error
+      if (error instanceof Error && error.message.includes('Active renewal workflow already exists')) {
+        results.skipped++;
+      } else {
+        const errorMsg = `Failed to create workflow for ${entityType} ${entityId}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        results.errors.push(errorMsg);
+      }
+    }
+  }
 }
 
 // Export singleton instance
