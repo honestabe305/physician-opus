@@ -6,6 +6,8 @@ import {
   type InsertSession,
   type SelectProfile,
   type InsertProfile,
+  type SelectPractice,
+  type InsertPractice,
   type SelectPhysician,
   type InsertPhysician,
   type SelectPhysicianLicense,
@@ -32,6 +34,20 @@ import {
   type InsertRolePolicy,
   type SelectLicenseDocument,
   type InsertLicenseDocument,
+  type SelectNotification,
+  type InsertNotification,
+  type SelectRenewalWorkflow,
+  type InsertRenewalWorkflow,
+  type SelectPayer,
+  type InsertPayer,
+  type SelectPracticeLocation,
+  type InsertPracticeLocation,
+  type SelectProviderBanking,
+  type InsertProviderBanking,
+  type SelectProfessionalReference,
+  type InsertProfessionalReference,
+  type SelectPayerEnrollment,
+  type InsertPayerEnrollment,
 } from '../shared/schema';
 
 // Simple in-memory storage implementation
@@ -39,6 +55,7 @@ export class MemoryStorage implements IStorage {
   private users: SelectUser[] = [];
   private sessions: SelectSession[] = [];
   private profiles: SelectProfile[] = [];
+  private practices: SelectPractice[] = [];
   private physicians: SelectPhysician[] = [];
   private licenses: SelectPhysicianLicense[] = [];
   private certifications: SelectPhysicianCertification[] = [];
@@ -52,6 +69,13 @@ export class MemoryStorage implements IStorage {
   private csrLicenses: SelectCsrLicense[] = [];
   private rolePolicies: SelectRolePolicy[] = [];
   private licenseDocuments: SelectLicenseDocument[] = [];
+  private notifications: SelectNotification[] = [];
+  private renewalWorkflows: SelectRenewalWorkflow[] = [];
+  private payers: SelectPayer[] = [];
+  private practiceLocations: SelectPracticeLocation[] = [];
+  private providerBanking: SelectProviderBanking[] = [];
+  private professionalReferences: SelectProfessionalReference[] = [];
+  private payerEnrollments: SelectPayerEnrollment[] = [];
 
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
@@ -112,19 +136,16 @@ export class MemoryStorage implements IStorage {
       tin: physician.tin ?? null,
       deaNumber: physician.deaNumber ?? null,
       caqhId: physician.caqhId ?? null,
+      providerRole: physician.providerRole ?? null,
+      clinicianType: physician.clinicianType ?? null,
+      supervisingPhysicianId: physician.supervisingPhysicianId ?? null,
+      collaborationPhysicianId: physician.collaborationPhysicianId ?? null,
       homeAddress: physician.homeAddress ?? null,
       mailingAddress: physician.mailingAddress ?? null,
       phoneNumbers: physician.phoneNumbers ?? null,
       emailAddress: physician.emailAddress ?? null,
       emergencyContact: physician.emergencyContact ?? null,
-      practiceName: physician.practiceName ?? null,
-      primaryPracticeAddress: physician.primaryPracticeAddress ?? null,
-      secondaryPracticeAddresses: physician.secondaryPracticeAddresses ?? null,
-      officePhone: physician.officePhone ?? null,
-      officeFax: physician.officeFax ?? null,
-      officeContactPerson: physician.officeContactPerson ?? null,
-      groupNpi: physician.groupNpi ?? null,
-      groupTaxId: physician.groupTaxId ?? null,
+      practiceId: physician.practiceId ?? null,
       malpracticeCarrier: physician.malpracticeCarrier ?? null,
       malpracticePolicyNumber: physician.malpracticePolicyNumber ?? null,
       coverageLimits: physician.coverageLimits ?? null,
@@ -169,7 +190,6 @@ export class MemoryStorage implements IStorage {
     return this.physicians.filter(p => 
       p.fullLegalName?.toLowerCase().includes(lowerQuery) ||
       p.npi?.includes(query) ||
-      p.practiceName?.toLowerCase().includes(lowerQuery) ||
       p.emailAddress?.toLowerCase().includes(lowerQuery)
     );
   }
@@ -908,6 +928,556 @@ export class MemoryStorage implements IStorage {
     }
   }
 
+  // Practice operations
+  async createPractice(practice: InsertPractice): Promise<SelectPractice> {
+    const newPractice: SelectPractice = {
+      id: this.generateId(),
+      name: practice.name,
+      primaryAddress: practice.primaryAddress ?? null,
+      secondaryAddresses: practice.secondaryAddresses ?? null,
+      phone: practice.phone ?? null,
+      fax: practice.fax ?? null,
+      contactPerson: practice.contactPerson ?? null,
+      email: practice.email ?? null,
+      website: practice.website ?? null,
+      npi: practice.npi ?? null,
+      taxId: practice.taxId ?? null,
+      practiceType: practice.practiceType ?? null,
+      specialty: practice.specialty ?? null,
+      isActive: practice.isActive ?? true,
+      createdBy: practice.createdBy ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.practices.push(newPractice);
+    return newPractice;
+  }
+
+  async getPractice(id: string): Promise<SelectPractice | null> {
+    return this.practices.find(p => p.id === id) || null;
+  }
+
+  async getPracticeByName(name: string): Promise<SelectPractice | null> {
+    return this.practices.find(p => p.name === name) || null;
+  }
+
+  async getPracticeByNpi(npi: string): Promise<SelectPractice | null> {
+    return this.practices.find(p => p.npi === npi) || null;
+  }
+
+  async updatePractice(id: string, updates: Partial<InsertPractice>): Promise<SelectPractice> {
+    const index = this.practices.findIndex(p => p.id === id);
+    if (index === -1) throw new Error('Practice not found');
+    
+    this.practices[index] = {
+      ...this.practices[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.practices[index];
+  }
+
+  async deletePractice(id: string): Promise<void> {
+    this.practices = this.practices.filter(p => p.id !== id);
+  }
+
+  async getAllPractices(): Promise<SelectPractice[]> {
+    return [...this.practices];
+  }
+
+  async searchPractices(query: string): Promise<SelectPractice[]> {
+    const lowerQuery = query.toLowerCase();
+    return this.practices.filter(p => 
+      p.name?.toLowerCase().includes(lowerQuery) ||
+      p.npi?.includes(query) ||
+      p.email?.toLowerCase().includes(lowerQuery)
+    );
+  }
+
+  async getPhysiciansByPractice(practiceId: string): Promise<SelectPhysician[]> {
+    return this.physicians.filter(p => p.practiceId === practiceId);
+  }
+
+  // Payer operations
+  async createPayer(payer: InsertPayer): Promise<SelectPayer> {
+    const newPayer: SelectPayer = {
+      id: this.generateId(),
+      name: payer.name,
+      linesOfBusiness: payer.linesOfBusiness,
+      reCredentialingCadence: payer.reCredentialingCadence ?? 36,
+      requiredFields: payer.requiredFields ?? null,
+      contactInfo: payer.contactInfo ?? null,
+      notes: payer.notes ?? null,
+      isActive: payer.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.payers.push(newPayer);
+    return newPayer;
+  }
+
+  async getPayer(id: string): Promise<SelectPayer | null> {
+    return this.payers.find(p => p.id === id) || null;
+  }
+
+  async getPayerByName(name: string): Promise<SelectPayer | null> {
+    return this.payers.find(p => p.name === name) || null;
+  }
+
+  async updatePayer(id: string, updates: Partial<InsertPayer>): Promise<SelectPayer> {
+    const index = this.payers.findIndex(p => p.id === id);
+    if (index === -1) throw new Error('Payer not found');
+    
+    this.payers[index] = {
+      ...this.payers[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.payers[index];
+  }
+
+  async deletePayer(id: string): Promise<void> {
+    this.payers = this.payers.filter(p => p.id !== id);
+  }
+
+  async getAllPayers(): Promise<SelectPayer[]> {
+    return [...this.payers];
+  }
+
+  async searchPayers(query: string): Promise<SelectPayer[]> {
+    const lowerQuery = query.toLowerCase();
+    return this.payers.filter(p => 
+      p.name?.toLowerCase().includes(lowerQuery) ||
+      p.notes?.toLowerCase().includes(lowerQuery)
+    );
+  }
+
+  // Practice Location operations
+  async createPracticeLocation(location: InsertPracticeLocation): Promise<SelectPracticeLocation> {
+    const newLocation: SelectPracticeLocation = {
+      id: this.generateId(),
+      practiceId: location.practiceId,
+      locationName: location.locationName,
+      streetAddress1: location.streetAddress1,
+      streetAddress2: location.streetAddress2 ?? null,
+      city: location.city,
+      state: location.state,
+      zipCode: location.zipCode,
+      zip4: location.zip4 ?? null,
+      county: location.county ?? null,
+      phone: location.phone ?? null,
+      fax: location.fax ?? null,
+      email: location.email ?? null,
+      hoursOfOperation: location.hoursOfOperation ?? null,
+      placeType: location.placeType,
+      notes: location.notes ?? null,
+      isActive: location.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.practiceLocations.push(newLocation);
+    return newLocation;
+  }
+
+  async getPracticeLocation(id: string): Promise<SelectPracticeLocation | null> {
+    return this.practiceLocations.find(l => l.id === id) || null;
+  }
+
+  async getPracticeLocationsByPractice(practiceId: string): Promise<SelectPracticeLocation[]> {
+    return this.practiceLocations.filter(l => l.practiceId === practiceId);
+  }
+
+  async updatePracticeLocation(id: string, updates: Partial<InsertPracticeLocation>): Promise<SelectPracticeLocation> {
+    const index = this.practiceLocations.findIndex(l => l.id === id);
+    if (index === -1) throw new Error('Practice location not found');
+    
+    this.practiceLocations[index] = {
+      ...this.practiceLocations[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.practiceLocations[index];
+  }
+
+  async deletePracticeLocation(id: string): Promise<void> {
+    this.practiceLocations = this.practiceLocations.filter(l => l.id !== id);
+  }
+
+  async getAllPracticeLocations(): Promise<SelectPracticeLocation[]> {
+    return [...this.practiceLocations];
+  }
+
+  // Provider Banking operations
+  async createProviderBanking(banking: InsertProviderBanking): Promise<SelectProviderBanking> {
+    const newBanking: SelectProviderBanking = {
+      id: this.generateId(),
+      physicianId: banking.physicianId,
+      bankName: banking.bankName,
+      routingNumber: banking.routingNumber,
+      accountNumber: banking.accountNumber,
+      accountType: banking.accountType ?? 'checking',
+      eftEnabled: banking.eftEnabled ?? false,
+      eraEnabled: banking.eraEnabled ?? false,
+      voidCheckUrl: banking.voidCheckUrl ?? null,
+      bankLetterUrl: banking.bankLetterUrl ?? null,
+      isActive: banking.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.providerBanking.push(newBanking);
+    return newBanking;
+  }
+
+  async getProviderBanking(id: string): Promise<SelectProviderBanking | null> {
+    return this.providerBanking.find(b => b.id === id) || null;
+  }
+
+  async getProviderBankingByPhysician(physicianId: string): Promise<SelectProviderBanking | null> {
+    return this.providerBanking.find(b => b.physicianId === physicianId && b.isActive) || null;
+  }
+
+  async updateProviderBanking(id: string, updates: Partial<InsertProviderBanking>): Promise<SelectProviderBanking> {
+    const index = this.providerBanking.findIndex(b => b.id === id);
+    if (index === -1) throw new Error('Provider banking not found');
+    
+    this.providerBanking[index] = {
+      ...this.providerBanking[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.providerBanking[index];
+  }
+
+  async deleteProviderBanking(id: string): Promise<void> {
+    this.providerBanking = this.providerBanking.filter(b => b.id !== id);
+  }
+
+  // Professional Reference operations
+  async createProfessionalReference(reference: InsertProfessionalReference): Promise<SelectProfessionalReference> {
+    const newReference: SelectProfessionalReference = {
+      id: this.generateId(),
+      physicianId: reference.physicianId,
+      referenceName: reference.referenceName,
+      title: reference.title ?? null,
+      organization: reference.organization ?? null,
+      relationship: reference.relationship ?? null,
+      phone: reference.phone,
+      email: reference.email,
+      yearsKnown: reference.yearsKnown ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.professionalReferences.push(newReference);
+    return newReference;
+  }
+
+  async getProfessionalReference(id: string): Promise<SelectProfessionalReference | null> {
+    return this.professionalReferences.find(r => r.id === id) || null;
+  }
+
+  async getProfessionalReferencesByPhysician(physicianId: string): Promise<SelectProfessionalReference[]> {
+    return this.professionalReferences.filter(r => r.physicianId === physicianId);
+  }
+
+  async updateProfessionalReference(id: string, updates: Partial<InsertProfessionalReference>): Promise<SelectProfessionalReference> {
+    const index = this.professionalReferences.findIndex(r => r.id === id);
+    if (index === -1) throw new Error('Professional reference not found');
+    
+    this.professionalReferences[index] = {
+      ...this.professionalReferences[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.professionalReferences[index];
+  }
+
+  async deleteProfessionalReference(id: string): Promise<void> {
+    this.professionalReferences = this.professionalReferences.filter(r => r.id !== id);
+  }
+
+  // Payer Enrollment operations
+  async createPayerEnrollment(enrollment: InsertPayerEnrollment): Promise<SelectPayerEnrollment> {
+    const newEnrollment: SelectPayerEnrollment = {
+      id: this.generateId(),
+      physicianId: enrollment.physicianId,
+      payerId: enrollment.payerId,
+      practiceLocationId: enrollment.practiceLocationId,
+      linesOfBusiness: enrollment.linesOfBusiness,
+      networkName: enrollment.networkName ?? null,
+      tinUsed: enrollment.tinUsed ?? null,
+      npiUsed: enrollment.npiUsed ?? null,
+      enrollmentStatus: enrollment.enrollmentStatus ?? 'discovery',
+      providerId: enrollment.providerId ?? null,
+      parStatus: enrollment.parStatus ?? 'pending',
+      effectiveDate: enrollment.effectiveDate ?? null,
+      revalidationDate: enrollment.revalidationDate ?? null,
+      reCredentialingDate: enrollment.reCredentialingDate ?? null,
+      submittedDate: enrollment.submittedDate ?? null,
+      approvedDate: enrollment.approvedDate ?? null,
+      stoppedDate: enrollment.stoppedDate ?? null,
+      stoppedReason: enrollment.stoppedReason ?? null,
+      nextActionRequired: enrollment.nextActionRequired ?? null,
+      nextActionDueDate: enrollment.nextActionDueDate ?? null,
+      progressPercentage: enrollment.progressPercentage ?? 0,
+      approvalLetterUrl: enrollment.approvalLetterUrl ?? null,
+      welcomeLetterUrl: enrollment.welcomeLetterUrl ?? null,
+      screenshotUrls: enrollment.screenshotUrls ?? null,
+      confirmationNumbers: enrollment.confirmationNumbers ?? null,
+      contacts: enrollment.contacts ?? null,
+      notes: enrollment.notes ?? null,
+      timeline: enrollment.timeline ?? null,
+      createdBy: enrollment.createdBy ?? null,
+      updatedBy: enrollment.updatedBy ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.payerEnrollments.push(newEnrollment);
+    return newEnrollment;
+  }
+
+  async getPayerEnrollment(id: string): Promise<SelectPayerEnrollment | null> {
+    return this.payerEnrollments.find(e => e.id === id) || null;
+  }
+
+  async getPayerEnrollmentsByPhysician(physicianId: string): Promise<SelectPayerEnrollment[]> {
+    return this.payerEnrollments.filter(e => e.physicianId === physicianId);
+  }
+
+  async getPayerEnrollmentsByPayer(payerId: string): Promise<SelectPayerEnrollment[]> {
+    return this.payerEnrollments.filter(e => e.payerId === payerId);
+  }
+
+  async getPayerEnrollmentsByLocation(locationId: string): Promise<SelectPayerEnrollment[]> {
+    return this.payerEnrollments.filter(e => e.practiceLocationId === locationId);
+  }
+
+  async getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]> {
+    return this.payerEnrollments.filter(e => e.enrollmentStatus === status);
+  }
+
+  async getExpiringEnrollments(days: number): Promise<SelectPayerEnrollment[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    const today = new Date();
+    
+    return this.payerEnrollments.filter(e => 
+      e.reCredentialingDate && 
+      new Date(e.reCredentialingDate) <= futureDate && 
+      new Date(e.reCredentialingDate) >= today
+    );
+  }
+
+  async updatePayerEnrollment(id: string, updates: Partial<InsertPayerEnrollment>): Promise<SelectPayerEnrollment> {
+    const index = this.payerEnrollments.findIndex(e => e.id === id);
+    if (index === -1) throw new Error('Payer enrollment not found');
+    
+    this.payerEnrollments[index] = {
+      ...this.payerEnrollments[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.payerEnrollments[index];
+  }
+
+  async updateEnrollmentStatus(id: string, status: string): Promise<SelectPayerEnrollment> {
+    return this.updatePayerEnrollment(id, { enrollmentStatus: status as any });
+  }
+
+  async updateEnrollmentProgress(id: string, progress: number): Promise<SelectPayerEnrollment> {
+    return this.updatePayerEnrollment(id, { progressPercentage: progress });
+  }
+
+  async deletePayerEnrollment(id: string): Promise<void> {
+    this.payerEnrollments = this.payerEnrollments.filter(e => e.id !== id);
+  }
+
+  // Notification operations
+  async createNotification(notification: InsertNotification): Promise<SelectNotification> {
+    const newNotification: SelectNotification = {
+      id: this.generateId(),
+      physicianId: notification.physicianId,
+      type: notification.type,
+      entityId: notification.entityId,
+      notificationDate: notification.notificationDate,
+      daysBeforeExpiry: notification.daysBeforeExpiry,
+      severity: notification.severity ?? 'info',
+      sentStatus: notification.sentStatus ?? 'pending',
+      sentAt: notification.sentAt ?? null,
+      errorMessage: notification.errorMessage ?? null,
+      providerName: notification.providerName,
+      licenseType: notification.licenseType,
+      state: notification.state,
+      expirationDate: notification.expirationDate,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.notifications.push(newNotification);
+    return newNotification;
+  }
+
+  async getNotification(id: string): Promise<SelectNotification | null> {
+    return this.notifications.find(n => n.id === id) || null;
+  }
+
+  async getNotificationsByPhysician(physicianId: string): Promise<SelectNotification[]> {
+    return this.notifications.filter(n => n.physicianId === physicianId);
+  }
+
+  async getUpcomingNotifications(days: number = 30): Promise<SelectNotification[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    const today = new Date();
+    
+    return this.notifications.filter(n => 
+      n.notificationDate && 
+      new Date(n.notificationDate) <= futureDate && 
+      new Date(n.notificationDate) >= today &&
+      n.sentStatus === 'pending'
+    );
+  }
+
+  async getPendingNotifications(): Promise<SelectNotification[]> {
+    return this.notifications.filter(n => n.sentStatus === 'pending');
+  }
+
+  async getFailedNotifications(): Promise<SelectNotification[]> {
+    return this.notifications.filter(n => n.sentStatus === 'failed');
+  }
+
+  async updateNotification(id: string, updates: Partial<InsertNotification>): Promise<SelectNotification> {
+    const index = this.notifications.findIndex(n => n.id === id);
+    if (index === -1) throw new Error('Notification not found');
+    
+    this.notifications[index] = {
+      ...this.notifications[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.notifications[index];
+  }
+
+  async markNotificationSent(id: string, sentAt: Date): Promise<SelectNotification> {
+    return this.updateNotification(id, { sentStatus: 'sent', sentAt });
+  }
+
+  async markNotificationFailed(id: string, errorMessage: string): Promise<SelectNotification> {
+    return this.updateNotification(id, { sentStatus: 'failed', errorMessage });
+  }
+
+  async markNotificationRead(id: string): Promise<SelectNotification> {
+    return this.updateNotification(id, { sentStatus: 'read' });
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    this.notifications = this.notifications.filter(n => n.id !== id);
+  }
+
+  async deleteOldNotifications(olderThan: Date): Promise<void> {
+    this.notifications = this.notifications.filter(n => 
+      n.createdAt > olderThan
+    );
+  }
+
+  async getNotificationsByType(type: 'license' | 'dea' | 'csr'): Promise<SelectNotification[]> {
+    return this.notifications.filter(n => n.type === type);
+  }
+
+  // Renewal Workflow operations
+  async createRenewalWorkflow(workflow: InsertRenewalWorkflow): Promise<SelectRenewalWorkflow> {
+    const newWorkflow: SelectRenewalWorkflow = {
+      id: this.generateId(),
+      physicianId: workflow.physicianId,
+      entityType: workflow.entityType,
+      entityId: workflow.entityId,
+      renewalStatus: workflow.renewalStatus ?? 'not_started',
+      applicationDate: workflow.applicationDate ?? null,
+      filedDate: workflow.filedDate ?? null,
+      approvalDate: workflow.approvalDate ?? null,
+      rejectionDate: workflow.rejectionDate ?? null,
+      rejectionReason: workflow.rejectionReason ?? null,
+      notes: workflow.notes ?? null,
+      nextActionRequired: workflow.nextActionRequired ?? null,
+      nextActionDueDate: workflow.nextActionDueDate ?? null,
+      progressPercentage: workflow.progressPercentage ?? 0,
+      checklist: workflow.checklist ?? null,
+      createdBy: workflow.createdBy ?? null,
+      updatedBy: workflow.updatedBy ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.renewalWorkflows.push(newWorkflow);
+    return newWorkflow;
+  }
+
+  async getRenewalWorkflow(id: string): Promise<SelectRenewalWorkflow | null> {
+    return this.renewalWorkflows.find(w => w.id === id) || null;
+  }
+
+  async getRenewalWorkflowsByPhysician(physicianId: string): Promise<SelectRenewalWorkflow[]> {
+    return this.renewalWorkflows.filter(w => w.physicianId === physicianId);
+  }
+
+  async getRenewalWorkflowsByEntity(entityType: string, entityId: string): Promise<SelectRenewalWorkflow[]> {
+    return this.renewalWorkflows.filter(w => 
+      w.entityType === entityType && w.entityId === entityId
+    );
+  }
+
+  async getActiveRenewalWorkflows(): Promise<SelectRenewalWorkflow[]> {
+    return this.renewalWorkflows.filter(w => 
+      w.renewalStatus !== 'approved' && 
+      w.renewalStatus !== 'rejected' && 
+      w.renewalStatus !== 'expired'
+    );
+  }
+
+  async getUpcomingRenewals(days: number): Promise<SelectRenewalWorkflow[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
+    const today = new Date();
+    
+    return this.renewalWorkflows.filter(w => 
+      w.nextActionDueDate && 
+      new Date(w.nextActionDueDate) <= futureDate && 
+      new Date(w.nextActionDueDate) >= today
+    );
+  }
+
+  async updateRenewalWorkflow(id: string, updates: Partial<InsertRenewalWorkflow>): Promise<SelectRenewalWorkflow> {
+    const index = this.renewalWorkflows.findIndex(w => w.id === id);
+    if (index === -1) throw new Error('Renewal workflow not found');
+    
+    this.renewalWorkflows[index] = {
+      ...this.renewalWorkflows[index],
+      ...updates,
+      updatedAt: new Date()
+    };
+    return this.renewalWorkflows[index];
+  }
+
+  async updateRenewalStatus(id: string, status: string): Promise<SelectRenewalWorkflow> {
+    const updates: any = { renewalStatus: status };
+    
+    if (status === 'approved') {
+      updates.approvalDate = new Date();
+      updates.progressPercentage = 100;
+    }
+    
+    return this.updateRenewalWorkflow(id, updates);
+  }
+
+  async updateRenewalProgress(id: string, progress: number, checklist?: any): Promise<SelectRenewalWorkflow> {
+    const updates: any = { progressPercentage: progress };
+    if (checklist !== undefined) {
+      updates.checklist = checklist;
+    }
+    return this.updateRenewalWorkflow(id, updates);
+  }
+
+  async deleteRenewalWorkflow(id: string): Promise<void> {
+    this.renewalWorkflows = this.renewalWorkflows.filter(w => w.id !== id);
+  }
+
   async getPhysicianFullProfile(physicianId: string) {
     return {
       physician: await this.getPhysician(physicianId),
@@ -920,7 +1490,10 @@ export class MemoryStorage implements IStorage {
       documents: await this.getPhysicianDocuments(physicianId),
       deaRegistrations: await this.getDeaRegistrationsByPhysician(physicianId),
       csrLicenses: await this.getCsrLicensesByPhysician(physicianId),
-      licenseDocuments: await this.getLicenseDocumentsByPhysician(physicianId)
+      licenseDocuments: await this.getLicenseDocumentsByPhysician(physicianId),
+      providerBanking: await this.getProviderBankingByPhysician(physicianId),
+      professionalReferences: await this.getProfessionalReferencesByPhysician(physicianId),
+      payerEnrollments: await this.getPayerEnrollmentsByPhysician(physicianId)
     };
   }
 }

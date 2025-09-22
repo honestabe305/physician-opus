@@ -1961,7 +1961,7 @@ export class PostgreSQLStorage implements IStorage {
     try {
       const db = await this.getDb();
       return await db.select().from(notifications).where(eq(notifications.physicianId, physicianId))
-        .orderBy(notifications.scheduledDate);
+        .orderBy(notifications.notificationDate);
     } catch (error) {
       console.error('Error getting notifications by physician:', error);
       throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1977,11 +1977,11 @@ export class PostgreSQLStorage implements IStorage {
       return await db.select().from(notifications)
         .where(
           and(
-            lt(notifications.scheduledDate, futureDate.toISOString()),
-            eq(notifications.sent, false)
+            lt(notifications.notificationDate, futureDate.toISOString()),
+            eq(notifications.sentStatus, 'pending')
           )
         )
-        .orderBy(notifications.scheduledDate);
+        .orderBy(notifications.notificationDate);
     } catch (error) {
       console.error('Error getting upcoming notifications:', error);
       throw new Error(`Failed to get upcoming notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1991,7 +1991,7 @@ export class PostgreSQLStorage implements IStorage {
   async getAllNotifications(): Promise<SelectNotification[]> {
     try {
       const db = await this.getDb();
-      return await db.select().from(notifications).orderBy(notifications.scheduledDate);
+      return await db.select().from(notifications).orderBy(notifications.notificationDate);
     } catch (error) {
       console.error('Error getting all notifications:', error);
       throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2003,21 +2003,21 @@ export class PostgreSQLStorage implements IStorage {
       const db = await this.getDb();
       return await db.select().from(notifications)
         .where(eq(notifications.type, type))
-        .orderBy(notifications.scheduledDate);
+        .orderBy(notifications.notificationDate);
     } catch (error) {
       console.error('Error getting notifications by type:', error);
       throw new Error(`Failed to get notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  async markNotificationSent(id: string): Promise<SelectNotification> {
+  async markNotificationSent(id: string, sentAt: Date): Promise<SelectNotification> {
     try {
       const db = await this.getDb();
       const [result] = await db
         .update(notifications)
         .set({ 
-          sent: true,
-          sentDate: new Date(),
+          sentStatus: 'sent',
+          sentAt: sentAt,
           updatedAt: new Date() 
         })
         .where(eq(notifications.id, id))
@@ -2049,6 +2049,85 @@ export class PostgreSQLStorage implements IStorage {
     } catch (error) {
       console.error('Error updating notification:', error);
       throw new Error(`Failed to update notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getPendingNotifications(): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(notifications)
+        .where(eq(notifications.sentStatus, 'pending'))
+        .orderBy(notifications.notificationDate);
+    } catch (error) {
+      console.error('Error getting pending notifications:', error);
+      throw new Error(`Failed to get pending notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getFailedNotifications(): Promise<SelectNotification[]> {
+    try {
+      const db = await this.getDb();
+      return await db.select().from(notifications)
+        .where(eq(notifications.sentStatus, 'failed'))
+        .orderBy(notifications.notificationDate);
+    } catch (error) {
+      console.error('Error getting failed notifications:', error);
+      throw new Error(`Failed to get failed notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async markNotificationFailed(id: string, errorMessage: string): Promise<SelectNotification> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(notifications)
+        .set({ 
+          sentStatus: 'failed',
+          errorMessage: errorMessage,
+          updatedAt: new Date() 
+        })
+        .where(eq(notifications.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Notification not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error marking notification failed:', error);
+      throw new Error(`Failed to mark notification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async markNotificationRead(id: string): Promise<SelectNotification> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .update(notifications)
+        .set({ 
+          sentStatus: 'read',
+          updatedAt: new Date() 
+        })
+        .where(eq(notifications.id, id))
+        .returning();
+      
+      if (!result) {
+        throw new Error('Notification not found');
+      }
+      return result;
+    } catch (error) {
+      console.error('Error marking notification read:', error);
+      throw new Error(`Failed to mark notification read: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async deleteOldNotifications(olderThan: Date): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.delete(notifications).where(lt(notifications.createdAt, olderThan));
+    } catch (error) {
+      console.error('Error deleting old notifications:', error);
+      throw new Error(`Failed to delete old notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -2105,7 +2184,7 @@ export class PostgreSQLStorage implements IStorage {
       const db = await this.getDb();
       return await db.select().from(renewalWorkflows)
         .where(and(
-          eq(renewalWorkflows.entityType, entityType),
+          eq(renewalWorkflows.entityType, entityType as 'license' | 'dea' | 'csr'),
           eq(renewalWorkflows.entityId, entityId)
         ))
         .orderBy(renewalWorkflows.createdAt);
@@ -2616,7 +2695,7 @@ export class PostgreSQLStorage implements IStorage {
   async getPayerEnrollmentsByStatus(status: string): Promise<SelectPayerEnrollment[]> {
     try {
       const db = await this.getDb();
-      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status));
+      return await db.select().from(payerEnrollments).where(eq(payerEnrollments.enrollmentStatus, status as 'discovery' | 'data_complete' | 'submitted' | 'payer_processing' | 'approved' | 'active' | 'stopped' | 'denied'));
     } catch (error) {
       console.error('Error getting payer enrollments by status:', error);
       throw new Error(`Failed to get payer enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2727,6 +2806,9 @@ export class PostgreSQLStorage implements IStorage {
     deaRegistrations: SelectDeaRegistration[];
     csrLicenses: SelectCsrLicense[];
     licenseDocuments: SelectLicenseDocument[];
+    providerBanking: SelectProviderBanking | null;
+    professionalReferences: SelectProfessionalReference[];
+    payerEnrollments: SelectPayerEnrollment[];
   }> {
     try {
       const [
