@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,59 +70,68 @@ export default function PayerEnrollmentDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [payerFilter, setPayerFilter] = useState("all");
 
-  // Fetch dashboard data
-  const { data: dashboardData, isLoading, error, refetch } = useQuery<DashboardData>({
-    queryKey: ['/api/payer-enrollments/dashboard'],
-    queryFn: async () => {
-      // Since there's no specific dashboard endpoint, we'll aggregate data from multiple endpoints
-      const [enrollments, payers] = await Promise.all([
-        fetch('/api/payer-enrollments').then(res => res.json()),
-        fetch('/api/payers').then(res => res.json())
-      ]);
-
-      // Calculate enrollment statistics
-      const enrollmentStats = enrollments.reduce((acc: EnrollmentStats, enrollment: any) => {
-        acc.total++;
-        acc[enrollment.enrollmentStatus as keyof EnrollmentStats]++;
-        return acc;
-      }, {
-        total: 0,
-        discovery: 0,
-        data_complete: 0,
-        submitted: 0,
-        payer_processing: 0,
-        approved: 0,
-        active: 0,
-        denied: 0,
-        stopped: 0
-      });
-
-      // Get recent enrollments (last 10)
-      const recentEnrollments = enrollments
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 10);
-
-      // Get upcoming deadlines (enrollments needing action)
-      const upcomingDeadlines = enrollments
-        .filter((enrollment: any) => 
-          ['discovery', 'data_complete', 'submitted'].includes(enrollment.enrollmentStatus)
-        )
-        .slice(0, 5);
-
-      // Create payer summary
-      const payerSummary = payers.map((payer: any) => ({
-        ...payer,
-        enrollmentCount: enrollments.filter((e: any) => e.payerId === payer.id).length
-      }));
-
-      return {
-        enrollmentStats,
-        recentEnrollments,
-        upcomingDeadlines,
-        payerSummary
-      };
-    }
+  // Separate queries for enrollments and payers (proper TanStack Query pattern)
+  const { data: enrollments, isLoading: enrollmentsLoading, error: enrollmentsError, refetch: refetchEnrollments } = useQuery({
+    queryKey: ['/api/payer-enrollments'],
   });
+
+  const { data: payers, isLoading: payersLoading, error: payersError, refetch: refetchPayers } = useQuery({
+    queryKey: ['/api/payers'],
+  });
+
+  // Memoized selectors for dashboard aggregation
+  const dashboardData = useMemo(() => {
+    if (!enrollments || !payers) return null;
+
+    // Calculate enrollment statistics using memoized selector
+    const enrollmentStats = enrollments.reduce((acc: EnrollmentStats, enrollment: any) => {
+      acc.total++;
+      acc[enrollment.enrollmentStatus as keyof EnrollmentStats]++;
+      return acc;
+    }, {
+      total: 0,
+      discovery: 0,
+      data_complete: 0,
+      submitted: 0,
+      payer_processing: 0,
+      approved: 0,
+      active: 0,
+      denied: 0,
+      stopped: 0
+    });
+
+    // Get recent enrollments (last 10)
+    const recentEnrollments = [...enrollments]
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+
+    // Get upcoming deadlines (enrollments needing action)
+    const upcomingDeadlines = enrollments
+      .filter((enrollment: any) => 
+        ['discovery', 'data_complete', 'submitted'].includes(enrollment.enrollmentStatus)
+      )
+      .slice(0, 5);
+
+    // Create payer summary
+    const payerSummary = payers.map((payer: any) => ({
+      ...payer,
+      enrollmentCount: enrollments.filter((e: any) => e.payerId === payer.id).length
+    }));
+
+    return {
+      enrollmentStats,
+      recentEnrollments,
+      upcomingDeadlines,
+      payerSummary
+    };
+  }, [enrollments, payers]);
+
+  const isLoading = enrollmentsLoading || payersLoading;
+  const error = enrollmentsError || payersError;
+  const refetch = () => {
+    refetchEnrollments();
+    refetchPayers();
+  };
 
   const calculateCompletionRate = (stats: EnrollmentStats) => {
     if (stats.total === 0) return 0;

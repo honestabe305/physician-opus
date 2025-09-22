@@ -45,24 +45,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 
-// Payer Enrollment form schema
-const payerEnrollmentSchema = z.object({
-  physicianId: z.string().min(1, "Physician is required"),
-  payerId: z.string().min(1, "Payer is required"),
-  practiceLocationId: z.string().min(1, "Practice location is required"),
-  enrollmentStatus: z.enum(['discovery', 'data_complete', 'submitted', 'payer_processing', 'approved', 'active', 'denied', 'stopped']).default('discovery'),
-  progressPercentage: z.number().min(0).max(100).default(0),
-  submissionDate: z.string().optional(),
-  approvalDate: z.string().optional(),
-  effectiveDate: z.string().optional(),
-  expirationDate: z.string().optional(),
-  providerNumber: z.string().optional(),
+import { insertPayerEnrollmentSchema, type InsertPayerEnrollment } from "../../shared/schema";
+
+// Extended schema with additional UI fields
+const payerEnrollmentFormSchema = insertPayerEnrollmentSchema.extend({
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium').optional(),
   notes: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
-  isActive: z.boolean().default(true),
 });
 
-type PayerEnrollmentFormData = z.infer<typeof payerEnrollmentSchema>;
+type PayerEnrollmentFormData = z.infer<typeof payerEnrollmentFormSchema>;
 
 interface PayerEnrollment {
   id: string;

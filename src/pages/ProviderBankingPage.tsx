@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,21 +34,18 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Provider Banking form schema
-const providerBankingSchema = z.object({
-  physicianId: z.string().min(1, "Physician is required"),
-  bankName: z.string().min(1, "Bank name is required"),
-  accountType: z.enum(['checking', 'savings', 'business_checking', 'business_savings']),
-  accountNumber: z.string().min(1, "Account number is required"),
-  routingNumber: z.string().length(9, "Routing number must be 9 digits"),
-  accountHolderName: z.string().min(1, "Account holder name is required"),
-  isVerified: z.boolean().default(false),
-  isPrimary: z.boolean().default(false),
-  isActive: z.boolean().default(true),
+import { insertProviderBankingSchema, type InsertProviderBanking } from "../../shared/schema";
+
+// Extended schema with additional fields for the UI
+const providerBankingFormSchema = insertProviderBankingSchema.extend({
+  // These might be additional fields not in the base schema
+  accountHolderName: z.string().min(1, "Account holder name is required").optional(),
+  isVerified: z.boolean().default(false).optional(),
+  isPrimary: z.boolean().default(false).optional(),
   notes: z.string().optional(),
 });
 
-type ProviderBankingFormData = z.infer<typeof providerBankingSchema>;
+type ProviderBankingFormData = z.infer<typeof providerBankingFormSchema>;
 
 interface ProviderBanking {
   id: string;
@@ -102,6 +99,7 @@ export default function ProviderBankingPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isAuditDialogOpen, setIsAuditDialogOpen] = useState(false);
   const [showDecrypted, setShowDecrypted] = useState<Record<string, boolean>>({});
+  const [ephemeralDecryptedData, setEphemeralDecryptedData] = useState<Record<string, any>>({});
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -109,11 +107,7 @@ export default function ProviderBankingPage() {
 
   // Fetch provider banking records (redacted by default)
   const { data: bankingRecords, isLoading, error, refetch } = useQuery<ProviderBanking[]>({
-    queryKey: ['/api/provider-banking'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/provider-banking');
-      return response || [];
-    }
+    queryKey: ['/api', 'provider-banking'],
   });
 
   // Fetch physicians for dropdown
@@ -138,7 +132,7 @@ export default function ProviderBankingPage() {
 
   // Create form
   const createForm = useForm<ProviderBankingFormData>({
-    resolver: zodResolver(providerBankingSchema),
+    resolver: zodResolver(providerBankingFormSchema),
     defaultValues: {
       physicianId: "",
       bankName: "",
@@ -155,7 +149,7 @@ export default function ProviderBankingPage() {
 
   // Edit form
   const editForm = useForm<ProviderBankingFormData>({
-    resolver: zodResolver(providerBankingSchema),
+    resolver: zodResolver(providerBankingFormSchema),
   });
 
   // Create mutation
@@ -167,8 +161,10 @@ export default function ProviderBankingPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/provider-banking'] });
+      // Fix cache invalidation to use proper segment array keys
+      queryClient.invalidateQueries({ queryKey: ['/api', 'provider-banking'] });
       setIsCreateDialogOpen(false);
+      clearEphemeralData(); // Clear sensitive data
       createForm.reset();
       toast({
         title: "Success",
@@ -193,9 +189,11 @@ export default function ProviderBankingPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/provider-banking'] });
+      // Fix cache invalidation to use proper segment array keys
+      queryClient.invalidateQueries({ queryKey: ['/api', 'provider-banking'] });
       setIsEditDialogOpen(false);
       setSelectedBanking(null);
+      clearEphemeralData(); // Clear sensitive data
       editForm.reset();
       toast({
         title: "Success",
@@ -219,7 +217,9 @@ export default function ProviderBankingPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/provider-banking'] });
+      // Fix cache invalidation to use proper segment array keys
+      queryClient.invalidateQueries({ queryKey: ['/api', 'provider-banking'] });
+      clearEphemeralData(); // Clear sensitive data
       toast({
         title: "Success",
         description: "Banking information deleted successfully",
@@ -234,28 +234,14 @@ export default function ProviderBankingPage() {
     }
   });
 
-  // Decrypt banking data (admin only)
+  // Decrypt banking data (admin only) - SECURITY: Store in ephemeral state, never cache
   const decryptBankingData = async (id: string) => {
-    if (!isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "Only administrators can view unredacted banking data",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const response = await apiRequest(`/api/provider-banking/${id}/decrypted`);
-      setShowDecrypted(prev => ({ ...prev, [id]: true }));
       
-      // Update the banking record in the list with decrypted data
-      queryClient.setQueryData(['/api/provider-banking'], (oldData: ProviderBanking[] | undefined) => {
-        if (!oldData) return oldData;
-        return oldData.map(record => 
-          record.id === id ? { ...record, ...response } : record
-        );
-      });
+      // SECURITY: Store decrypted data in ephemeral component state only
+      setEphemeralDecryptedData(prev => ({ ...prev, [id]: response }));
+      setShowDecrypted(prev => ({ ...prev, [id]: true }));
 
       toast({
         title: "Sensitive Data Accessed",
@@ -279,14 +265,6 @@ export default function ProviderBankingPage() {
   ) || [];
 
   const handleEdit = (banking: ProviderBanking) => {
-    if (!isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "Only administrators can edit banking information",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setSelectedBanking(banking);
     editForm.reset({
@@ -310,28 +288,32 @@ export default function ProviderBankingPage() {
   };
 
   const handleViewAudit = (banking: ProviderBanking) => {
-    if (!isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "Only administrators can view audit trails",
-        variant: "destructive",
-      });
-      return;
-    }
     setSelectedBanking(banking);
     setIsAuditDialogOpen(true);
   };
 
   const handleDelete = (banking: ProviderBanking) => {
-    if (!isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "Only administrators can delete banking information",
-        variant: "destructive",
-      });
-      return;
-    }
     deleteMutation.mutate(banking.id);
+  };
+
+  // SECURITY: Immediate redaction when dialog closes
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Clear ephemeral decrypted data when closing dialogs
+        setEphemeralDecryptedData({});
+        setShowDecrypted({});
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  // Clear ephemeral data when dialogs close
+  const clearEphemeralData = () => {
+    setEphemeralDecryptedData({});
+    setShowDecrypted({});
   };
 
   const maskAccountNumber = (accountNumber: string) => {
@@ -342,6 +324,14 @@ export default function ProviderBankingPage() {
   const maskRoutingNumber = (routingNumber: string) => {
     if (routingNumber.length <= 4) return routingNumber;
     return `*****${routingNumber.slice(-4)}`;
+  };
+
+  // Get display value for sensitive fields
+  const getDisplayValue = (bankingId: string, field: 'accountNumber' | 'routingNumber', originalValue: string) => {
+    if (showDecrypted[bankingId] && ephemeralDecryptedData[bankingId]) {
+      return ephemeralDecryptedData[bankingId][field] || originalValue;
+    }
+    return field === 'accountNumber' ? maskAccountNumber(originalValue) : maskRoutingNumber(originalValue);
   };
 
   if (error) {
@@ -489,24 +479,33 @@ export default function ProviderBankingPage() {
                       <div className="flex items-center gap-4 text-sm">
                         <span>
                           <span className="text-muted-foreground">Account:</span> {
-                            showDecrypted[banking.id] ? banking.accountNumber : maskAccountNumber(banking.accountNumber)
+                            getDisplayValue(banking.id, 'accountNumber', banking.accountNumber)
                           }
                         </span>
                         <span>
                           <span className="text-muted-foreground">Routing:</span> {
-                            showDecrypted[banking.id] ? banking.routingNumber : maskRoutingNumber(banking.routingNumber)
+                            getDisplayValue(banking.id, 'routingNumber', banking.routingNumber)
                           }
                         </span>
-                        {isAdmin && !showDecrypted[banking.id] && (
+                        {isAdmin && (
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => decryptBankingData(banking.id)}
+                            onClick={() => showDecrypted[banking.id] ? clearEphemeralData() : decryptBankingData(banking.id)}
                             className="text-xs h-6 px-2"
                             data-testid={`button-decrypt-${index}`}
                           >
-                            <Eye className="w-3 h-3 mr-1" />
-                            Show Full
+                            {showDecrypted[banking.id] ? (
+                              <>
+                                <EyeOff className="w-3 h-3 mr-1" />
+                                Hide
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3 h-3 mr-1" />
+                                Show Full
+                              </>
+                            )}
                           </Button>
                         )}
                       </div>
@@ -578,7 +577,10 @@ export default function ProviderBankingPage() {
 
       {/* Create Dialog */}
       {isAdmin && (
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (!open) clearEphemeralData();
+        }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-create-banking">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">

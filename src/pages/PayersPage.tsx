@@ -30,33 +30,9 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Payer form schema
-const payerSchema = z.object({
-  name: z.string().min(1, "Payer name is required"),
-  linesOfBusiness: z.array(z.enum([
-    'hmo', 'ppo', 'epo', 'pos', 'medicare_advantage', 'medicaid', 'commercial', 'workers_comp', 'tricare'
-  ])).min(1, "At least one line of business is required"),
-  reCredentialingCadence: z.number().min(1).max(120).default(36),
-  requiredFields: z.object({
-    demographics: z.boolean().default(true),
-    education: z.boolean().default(true),
-    training: z.boolean().default(true),
-    workHistory: z.boolean().default(true),
-    references: z.boolean().default(true),
-    malpractice: z.boolean().default(true),
-    dea: z.boolean().default(false),
-    csr: z.boolean().default(false),
-  }).optional(),
-  contactInfo: z.object({
-    phone: z.string().optional(),
-    email: z.string().email().optional(),
-    website: z.string().url().optional(),
-  }).optional(),
-  notes: z.string().optional(),
-  isActive: z.boolean().default(true)
-});
+import { insertPayerSchema, type InsertPayer } from "../../shared/schema";
 
-type PayerFormData = z.infer<typeof payerSchema>;
+type PayerFormData = InsertPayer;
 
 interface Payer {
   id: string;
@@ -93,16 +69,12 @@ export default function PayersPage() {
 
   // Fetch payers
   const { data: payers, isLoading, error, refetch } = useQuery<Payer[]>({
-    queryKey: ['/api/payers'],
-    queryFn: async () => {
-      const response = await apiRequest('/api/payers');
-      return response || [];
-    }
+    queryKey: ['/api', 'payers'],
   });
 
   // Create form
   const createForm = useForm<PayerFormData>({
-    resolver: zodResolver(payerSchema),
+    resolver: zodResolver(insertPayerSchema),
     defaultValues: {
       name: "",
       linesOfBusiness: [],
@@ -129,7 +101,7 @@ export default function PayersPage() {
 
   // Edit form
   const editForm = useForm<PayerFormData>({
-    resolver: zodResolver(payerSchema),
+    resolver: zodResolver(insertPayerSchema),
     defaultValues: {
       name: "",
       linesOfBusiness: [],
