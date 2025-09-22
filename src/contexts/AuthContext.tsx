@@ -159,13 +159,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Invalidate any cached queries
         await queryClient.invalidateQueries();
         
-        // Handle redirect immediately after login with security validation
+        // Handle redirect after login with proper timing
         const rawRedirect = new URLSearchParams(window.location.search).get('redirect');
         const redirectTo = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/';
-        // Use a microtask to ensure state is updated first
-        Promise.resolve().then(() => {
+        
+        // Use setTimeout to ensure state updates have propagated
+        setTimeout(() => {
           setLocation(redirectTo);
-        });
+        }, 100);
         
         toast({
           title: "Login successful",
